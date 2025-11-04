@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       options: {
         data: {
           full_name: fullName,
-          role: 'technician'
+          role: 'técnico'
         }
       }
     });
@@ -88,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
-  const isAdmin = profile?.role === 'admin';
+  const isAdmin = profile?.role === 'administrador';
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, signUp, signIn, signOut, isAdmin }}>

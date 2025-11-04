@@ -11,7 +11,7 @@
   - `id` (uuid, primary key) - Links to auth.users
   - `email` (text) - User email
   - `full_name` (text) - User's full name
-  - `role` (text) - Either 'admin' or 'technician'
+  - `role` (text) - Either 'administrador' or 'técnico'
   - `created_at` (timestamptz) - Account creation timestamp
 
   ### 2. devices
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email text NOT NULL,
   full_name text NOT NULL,
-  role text NOT NULL DEFAULT 'technician' CHECK (role IN ('admin', 'technician')),
+  role text NOT NULL DEFAULT 'técnico' CHECK (role IN ('administrador', 'técnico')),
   created_at timestamptz DEFAULT now()
 );
 
@@ -113,7 +113,7 @@ CREATE POLICY "Admins can read all profiles"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
+      AND profiles.role = 'administrador'
     )
   );
 
@@ -138,7 +138,7 @@ CREATE POLICY "Technicians can view own devices"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
+      AND profiles.role = 'administrador'
     )
   );
 
@@ -155,7 +155,7 @@ CREATE POLICY "Technicians can update own devices"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
+      AND profiles.role = 'administrador'
     )
   )
   WITH CHECK (
@@ -163,7 +163,7 @@ CREATE POLICY "Technicians can update own devices"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
+      AND profiles.role = 'administrador'
     )
   );
 
@@ -175,7 +175,7 @@ CREATE POLICY "Technicians can delete own devices"
     EXISTS (
       SELECT 1 FROM profiles
       WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
+      AND profiles.role = 'administrador'
     )
   );
 
@@ -234,7 +234,7 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', 'User'),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'technician')
+    COALESCE(NEW.raw_user_meta_data->>'role', 'técnico')
   );
   RETURN NEW;
 END;

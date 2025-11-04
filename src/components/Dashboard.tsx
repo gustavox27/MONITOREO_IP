@@ -7,7 +7,7 @@ import { LogOut, WifiOff, CheckCircle, Wifi, BarChart3, Monitor } from 'lucide-r
 
 export function Dashboard() {
   const { user, profile, signOut, isAdmin } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'monitoring'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'monitoring'>('monitoring');
   const [agentInactive, setAgentInactive] = useState(false);
   const [agentRecovered, setAgentRecovered] = useState(false);
   const lastUpdateTimeRef = useRef<number>(Date.now());
@@ -59,7 +59,7 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 shadow-sm">
+      <nav className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
@@ -70,7 +70,7 @@ export function Dashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Monitor IP</h1>
-                <p className="text-xs text-gray-500">{profile?.full_name} - {profile?.role}</p>
+                <p className="text-xs text-gray-500">{profile?.full_name} - {profile?.role === 'admin' ? 'Administrador' : 'Técnico'}</p>
               </div>
             </div>
 <div className="flex items-center gap-3">
@@ -121,7 +121,7 @@ export function Dashboard() {
         </div>
       </nav>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
         {agentRecovered && !agentInactive && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 shadow-sm animate-pulse">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />

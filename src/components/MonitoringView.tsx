@@ -6,7 +6,8 @@ import { HistoryModal } from './HistoryModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { FilterControls } from './FilterControls';
-import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle } from 'lucide-react';
+import { BulkUploadModal } from './BulkUploadModal';
+import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
 import type { Database } from '../lib/database.types';
 
@@ -31,6 +32,25 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const [deviceTypeFilter, setDeviceTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sortBy, setSortBy] = useState('created_at');
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const bulkMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (bulkMenuRef.current && !bulkMenuRef.current.contains(event.target as Node)) {
+        setShowBulkMenu(false);
+      }
+    };
+
+    if (showBulkMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showBulkMenu]);
 
   useEffect(() => {
     loadDevices();
@@ -248,6 +268,52 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
             <Plus className="w-5 h-5" />
             Agregar Dispositivo
           </button>
+
+          <div className="relative" ref={bulkMenuRef}>
+            <button
+              onClick={() => setShowBulkMenu(!showBulkMenu)}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition font-medium"
+            >
+              <Upload className="w-5 h-5" />
+              <span>Carga Masiva</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+
+            {showBulkMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                <button
+                  onClick={() => {
+                    setShowBulkUpload(true);
+                    setShowBulkMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Cargar Archivo CSV
+                </button>
+                <button
+                  onClick={() => {
+                    const csvContent = 'nombre,direccion_ip,tipo_dispositivo\n' +
+                      'Servidor Principal,192.168.1.10,server\n' +
+                      'Impresora Oficina,192.168.1.20,printer_laser\n' +
+                      'Router Principal,192.168.1.1,router\n';
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'plantilla_dispositivos.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setShowBulkMenu(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Descargar Plantilla CSV
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -281,28 +347,28 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
                     Tipo
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
                     Dispositivo
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Dirección IP
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
+                    IP
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
                     Estado
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Tiempo de Respuesta
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
+                    Respuesta
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Tiempo en Actividad
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
+                    Actividad
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
                     Última Caída
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase">
                     Acciones
                   </th>
                 </tr>
@@ -314,62 +380,62 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
                     onClick={() => handleRowClick(device)}
                     className="hover:bg-blue-50 transition cursor-pointer"
                   >
-                    <td className="px-6 py-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${getDeviceIconColor(device.device_type)}`}>
-                        {getDeviceIcon(device.device_type, 'w-5 h-5')}
+                    <td className="px-3 py-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getDeviceIconColor(device.device_type)}`}>
+                        {getDeviceIcon(device.device_type, 'w-4 h-4')}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{device.name}</div>
+                    <td className="px-3 py-2">
+                      <div className="text-sm font-medium text-gray-900">{device.name}</div>
                     </td>
-                    <td className="px-6 py-4">
-                      <code className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded">
+                    <td className="px-3 py-2">
+                      <code className="text-xs text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">
                         {device.ip_address}
                       </code>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(device.status)}`}>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(device.status)}`}>
                         {getStatusIcon(device.status)}
                         {device.status === 'online' ? 'EN LÍNEA' : 'FUERA DE LÍNEA'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-700">
+                    <td className="px-3 py-2">
+                      <span className="text-xs text-gray-700">
                         {device.response_time ? `${device.response_time}ms` : 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-medium text-gray-700">
+                    <td className="px-3 py-2">
+                      <span className="text-xs font-medium text-gray-700">
                         {calculateUptime(device)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-600">
+                    <td className="px-3 py-2">
+                      <span className="text-xs text-gray-600">
                         {formatDate(device.last_down)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={(e) => handleHistory(device, e)}
-                          className="p-2 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition"
+                          className="p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded transition"
                           title="Ver Historial"
                         >
-                          <History className="w-4 h-4" />
+                          <History className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={(e) => handleEdit(device, e)}
-                          className="p-2 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition"
+                          className="p-1.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded transition"
                           title="Editar"
                         >
-                          <Pencil className="w-4 h-4" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={(e) => handleDeleteClick(device, e)}
-                          className="p-2 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded-lg transition"
+                          className="p-1.5 text-gray-600 hover:bg-red-50 hover:text-red-600 rounded transition"
                           title="Eliminar"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -409,6 +475,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
         <DeviceDetailsPanel
           device={detailsDevice}
           onClose={() => setDetailsDevice(null)}
+        />
+      )}
+
+      {showBulkUpload && (
+        <BulkUploadModal
+          userId={userId}
+          onClose={() => setShowBulkUpload(false)}
         />
       )}
     </div>

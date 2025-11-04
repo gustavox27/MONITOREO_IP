@@ -114,7 +114,7 @@ export const deviceService = {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('role', 'technician')
+      .eq('role', 'técnico')
       .order('full_name');
 
     if (error) throw error;
