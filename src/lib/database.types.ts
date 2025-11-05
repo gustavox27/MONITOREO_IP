@@ -21,14 +21,14 @@ export interface Database {
           id: string
           email: string
           full_name: string
-          role?: 'admin' | 'technician'
+          role?: 'administrador' | 'técnico'
           created_at?: string
         }
         Update: {
           id?: string
           email?: string
           full_name?: string
-          role?: 'admin' | 'technician'
+          role?: 'administrador' | 'técnico'
           created_at?: string
         }
       }

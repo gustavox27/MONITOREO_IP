@@ -70,7 +70,7 @@ export function Dashboard() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Monitor IP</h1>
-                <p className="text-xs text-gray-500">{profile?.full_name} - {profile?.role === 'admin' ? 'Administrador' : 'Técnico'}</p>
+                <p className="text-xs text-gray-500">{profile?.full_name} - {profile?.role === 'administrador' ? 'Administrador' : 'Técnico'}</p>
               </div>
             </div>
 <div className="flex items-center gap-3">

@@ -121,6 +121,23 @@ export const deviceService = {
     return data;
   },
 
+  async checkDuplicateIp(ipAddress: string, userId: string, excludeDeviceId?: string) {
+    let query = supabase
+      .from('devices')
+      .select('id, name')
+      .eq('ip_address', ipAddress)
+      .eq('user_id', userId);
+
+    if (excludeDeviceId) {
+      query = query.neq('id', excludeDeviceId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) throw error;
+    return data;
+  },
+
   async getAllRecentEvents(limit = 50) {
     const { data, error } = await supabase
       .from('events')

@@ -39,6 +39,18 @@ export function DeviceForm({ device, userId, onClose }: DeviceFormProps) {
     }
 
     try {
+      const duplicate = await deviceService.checkDuplicateIp(
+        ipAddress,
+        userId,
+        device?.id
+      );
+
+      if (duplicate) {
+        setError(`Ya tienes un dispositivo con esta IP: "${duplicate.name}". No puedes agregar la misma IP dos veces.`);
+        setLoading(false);
+        return;
+      }
+
       if (device) {
         await deviceService.updateDevice(device.id, {
           name,
