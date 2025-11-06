@@ -204,23 +204,11 @@ export function BulkUploadModal({ userId, onClose }: BulkUploadModalProps) {
           {devices.length === 0 ? (
             <div className="space-y-6">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">Cómo usar:</h3>
-                <ol className="list-decimal ml-5 space-y-1 text-sm text-blue-800">
-                  <li>Descarga la plantilla Excel</li>
-                  <li>Completa cada fila con:
-                    <ul className="list-disc ml-5 mt-1">
-                      <li><strong>nombre</strong> - Nombre del dispositivo</li>
-                      <li><strong>direccion_ip</strong> - Dirección IP (ej: 192.168.1.10)</li>
-                      <li><strong>tipo_dispositivo</strong> - Tipo del dispositivo</li>
-                    </ul>
-                  </li>
-                  <li>Carga el archivo completado</li>
-                  <li>Revisa la vista previa y confirma la carga</li>
-                </ol>
+                <h3>Descarga la plantilla para ingresar tus datos: </h3>
               </div>
 
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Tipos de dispositivo válidos (en español):</h3>
+                <h3 className="font-semibold text-gray-900 mb-3">Tipos de dispositivo válidos:</h3>
                 <div className="grid grid-cols-2 gap-2 text-sm text-gray-700">
                   <div><code className="bg-white px-2 py-1 rounded">servidor</code> - Servidor</div>
                   <div><code className="bg-white px-2 py-1 rounded">impresora_laser</code> - Impresora Láser</div>
