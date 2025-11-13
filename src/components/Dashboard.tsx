@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DashboardView } from './DashboardView';
 import { MonitoringView } from './MonitoringView';
-import { LogOut, WifiOff, CheckCircle, Wifi, BarChart3, Monitor } from 'lucide-react';
+import { LogOut, Wifi, WifiOff, BarChart3, Monitor } from 'lucide-react';
 
 export function Dashboard() {
   const { user, profile, signOut, isAdmin } = useAuth();
@@ -37,13 +37,13 @@ export function Dashboard() {
         }
         inactivityTimerRef.current = setTimeout(() => {
           setAgentInactive(true);
-        }, 10000);
+        }, 30000);
       })
       .subscribe();
 
     inactivityTimerRef.current = setTimeout(() => {
       setAgentInactive(true);
-    }, 10000);
+    }, 30000);
 
     return () => {
       channel.unsubscribe();
@@ -97,15 +97,15 @@ export function Dashboard() {
                 <span>Monitoreo</span>
               </button>
 
-              {!agentInactive ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
-                  <Wifi className="w-4 h-4 text-green-600" />
-                  <span className="text-xs font-medium text-green-700">Rastreando</span>
-                </div>
-              ) : (
+              {agentInactive ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg">
                   <WifiOff className="w-4 h-4 text-red-600" />
                   <span className="text-xs font-medium text-red-700">Pérdida de conexión</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                  <Wifi className="w-4 h-4 text-green-600" />
+                  <span className="text-xs font-medium text-green-700">Rastreando</span>
                 </div>
               )}
 
@@ -122,36 +122,7 @@ export function Dashboard() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        {agentRecovered && !agentInactive && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 shadow-sm animate-pulse">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-green-900 mb-1">
-                Sistema de Monitoreo Activo
-              </h3>
-              <p className="text-sm text-green-800">
-                El agente de monitoreo se ha reconectado y está funcionando correctamente. Los datos se están actualizando en tiempo real.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {agentInactive && !agentRecovered && (
-          <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3 shadow-sm">
-            <WifiOff className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-amber-900 mb-1">
-                Sistema de Monitoreo Inactivo
-              </h3>
-              <p className="text-sm text-amber-800">
-                El agente de monitoreo no ha actualizado el estado de los dispositivos en los últimos 10 segundos.
-                Por favor, verifique que el servicio de monitoreo esté funcionando correctamente.
-              </p>
-            </div>
-          </div>
-        )}
-
-{currentView === 'dashboard' ? (
+        {currentView === 'dashboard' ? (
           <DashboardView />
         ) : (
           <MonitoringView userId={user!.id} isAdmin={isAdmin} />

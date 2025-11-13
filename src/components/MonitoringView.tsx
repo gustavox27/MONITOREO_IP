@@ -7,12 +7,23 @@ import { DeleteConfirmModal } from './DeleteConfirmModal';
 import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { FilterControls } from './FilterControls';
 import { BulkUploadModal } from './BulkUploadModal';
+import { NotificationCenter, playNotificationSound } from './NotificationCenter';
 import * as XLSX from 'xlsx';
 import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
 import type { Database } from '../lib/database.types';
 
 type Device = Database['public']['Tables']['devices']['Row'];
+
+interface Notification {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  deviceIp: string;
+  status: 'online' | 'offline';
+  timestamp: number;
+  displayDuration: number;
+}
 
 interface MonitoringViewProps {
   userId: string;
@@ -35,7 +46,9 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const [sortBy, setSortBy] = useState('created_at');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const bulkMenuRef = useRef<HTMLDivElement>(null);
+  const deviceStatusRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,18 +79,65 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           setDevices((prev) => {
             const exists = prev.some(d => d.id === payload.new.id);
             if (exists) return prev;
-            return [...prev, payload.new as Device];
+            const newDevice = payload.new as Device;
+            deviceStatusRef.current.set(newDevice.id, newDevice.status);
+            return [...prev, newDevice];
           });
         } else if (payload.eventType === 'UPDATE') {
           setDevices((prev) =>
-            prev.map((device) =>
-              device.id === payload.new.id ? (payload.new as Device) : device
-            )
+            prev.map((device) => {
+              const updatedDevice = payload.new as Device;
+              if (device.id === updatedDevice.id) {
+                const previousStatus = deviceStatusRef.current.get(device.id);
+                if (previousStatus && previousStatus !== updatedDevice.status) {
+                  addNotification(updatedDevice, updatedDevice.status);
+                  playNotificationSound(updatedDevice.status);
+                }
+                deviceStatusRef.current.set(device.id, updatedDevice.status);
+                return updatedDevice;
+              }
+              return device;
+            })
           );
         } else if (payload.eventType === 'DELETE') {
           setDevices((prev) => prev.filter((device) => device.id !== payload.old.id));
         }
       })
+      .subscribe();
+
+    const eventsChannel = supabase
+      .channel('monitoring-events')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'events' },
+        (payload) => {
+          const newEvent = payload.new as any;
+
+          setDevices((prev) =>
+            prev.map((device) => {
+              if (device.id === newEvent.device_id) {
+                const updatedDevice = {
+                  ...device,
+                  status: newEvent.status,
+                  response_time: newEvent.response_time,
+                  last_down: newEvent.status === 'offline' ? new Date().toISOString() : device.last_down,
+                  last_check: new Date().toISOString(),
+                };
+
+                const previousStatus = deviceStatusRef.current.get(device.id);
+                if (previousStatus && previousStatus !== newEvent.status) {
+                  addNotification(updatedDevice, newEvent.status);
+                  playNotificationSound(newEvent.status);
+                }
+                deviceStatusRef.current.set(device.id, newEvent.status);
+
+                return updatedDevice;
+              }
+              return device;
+            })
+          );
+        }
+      )
       .subscribe();
 
     const timerInterval = setInterval(() => {
@@ -86,9 +146,29 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
     return () => {
       channel.unsubscribe();
+      eventsChannel.unsubscribe();
       clearInterval(timerInterval);
     };
   }, [filterTechnician, isAdmin]);
+
+  const addNotification = (device: Device, status: 'online' | 'offline') => {
+    const notificationId = `${device.id}-${Date.now()}`;
+    const newNotification: Notification = {
+      id: notificationId,
+      deviceId: device.id,
+      deviceName: device.name,
+      deviceIp: device.ip_address,
+      status,
+      timestamp: Date.now(),
+      displayDuration: 6000,
+    };
+
+    setNotifications((prev) => [newNotification, ...prev]);
+  };
+
+  const dismissNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
 
   const loadDevices = async () => {
     try {
@@ -278,6 +358,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   return (
     <div className="space-y-6">
+      <NotificationCenter notifications={notifications} onDismiss={dismissNotification} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Monitor de Dispositivos</h2>

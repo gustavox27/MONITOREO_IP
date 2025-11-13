@@ -98,13 +98,27 @@ export const deviceService = {
     if (eventError) throw eventError;
   },
 
-  async getDeviceEvents(deviceId: string, limit = 100) {
-    const { data, error } = await supabase
+  async getDeviceEvents(deviceId: string, limit?: number | null, startDate?: string, endDate?: string) {
+    let query = supabase
       .from('events')
       .select('*')
-      .eq('device_id', deviceId)
-      .order('timestamp', { ascending: false })
-      .limit(limit);
+      .eq('device_id', deviceId);
+
+    if (startDate) {
+      query = query.gte('timestamp', startDate);
+    }
+
+    if (endDate) {
+      query = query.lte('timestamp', endDate);
+    }
+
+    query = query.order('timestamp', { ascending: false });
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
     return data as Event[];

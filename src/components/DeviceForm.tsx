@@ -46,7 +46,7 @@ export function DeviceForm({ device, userId, onClose }: DeviceFormProps) {
       );
 
       if (duplicate) {
-        setError(`Ya tienes un dispositivo con esta IP: "${duplicate.name}". No puedes agregar la misma IP dos veces.`);
+        setError(`Ya tienes un dispositivo con esta IP: "${(duplicate as any).name}". No puedes agregar la misma IP dos veces.`);
         setLoading(false);
         return;
       }
