@@ -10,6 +10,10 @@ A professional multi-user web application for monitoring internal IP addresses w
 - **Event History**: Complete audit trail of all status changes with timestamps
 - **Multi-User Support**: Secure authentication with role-based access control
 - **Responsive Dashboard**: Professional UI with dynamic status indicators
+- **Native Push Notifications**: Notificaciones PUSH que funcionan incluso con el navegador minimizado o en otra pestaña
+- **Notification Grouping**: Agrupa múltiples cambios de estado en una sola notificación
+- **Sound & Vibration**: Sonidos profesionales y retroalimentación háptica diferenciada por estado
+- **User Preferences**: Control total sobre notificaciones, sonidos y volumen
 
 ### User Roles
 - **Technician**: Manages and views only their assigned devices
@@ -107,18 +111,29 @@ python monitor_agent.py
 ```
 src/
 ├── components/
-│   ├── AuthPages.tsx       # Login and registration pages
-│   ├── Dashboard.tsx       # Main dashboard with device table
-│   ├── DeviceForm.tsx      # Add/edit device modal
-│   └── HistoryModal.tsx    # Event history viewer
-├── contexts/
-│   └── AuthContext.tsx     # Authentication state management
+│   ├── AuthPages.tsx                  # Login and registration pages
+│   ├── Dashboard.tsx                  # Main dashboard with device table
+│   ├── MonitoringView.tsx             # Device monitoring with notifications
+│   ├── DeviceForm.tsx                 # Add/edit device modal
+│   ├── HistoryModal.tsx               # Event history viewer
+│   ├── NotificationCenter.tsx          # In-app notification display
+│   ├── NotificationTester.tsx          # Testing panel for notifications
+│   ├── NotificationSettings.tsx        # User preference configuration
+│   └── NotificationsManagement.tsx     # Main notifications management
 ├── services/
-│   └── deviceService.ts    # API operations for devices/events
+│   ├── deviceService.ts               # API operations for devices/events
+│   └── notificationService.ts         # Native notification management
+├── contexts/
+│   └── AuthContext.tsx                # Authentication state management
 ├── lib/
-│   ├── supabase.ts         # Supabase client configuration
-│   └── database.types.ts   # TypeScript types for database
-└── App.tsx                 # Main application component
+│   ├── supabase.ts                    # Supabase client configuration
+│   └── database.types.ts              # TypeScript types for database
+├── public/
+│   ├── sw.js                          # Service Worker
+│   ├── manifest.json                  # PWA manifest
+│   ├── notification-icon.svg          # Notification icon
+│   └── notification-badge.svg         # Notification badge
+└── App.tsx                            # Main application component
 ```
 
 ## API Operations
@@ -214,6 +229,21 @@ npm run build
 - Verify email confirmation is disabled in Supabase Auth settings
 - Check browser console for errors
 
+## Notifications System
+
+The application includes a professional push notification system with:
+
+- **Native Browser Notifications**: Funciona incluso cuando el navegador está minimizado o en otra pestaña
+- **Service Worker Integration**: Gestiona notificaciones en segundo plano
+- **Smart Grouping**: Agrupa múltiples cambios de estado
+- **Customizable Preferences**: Volumen, duración, tipo de alertas
+- **Sound Effects**: Sonidos profesionales diferenciados por estado
+- **Haptic Feedback**: Vibración en dispositivos soportados
+- **Database Persistence**: Preferencias guardadas en Supabase
+
+Para configurar y probar las notificaciones, ve a la sección "Notificaciones" en el Dashboard.
+Más detalles en `NOTIFICATIONS_GUIDE.md`
+
 ## Future Enhancements
 
 Potential features for future development:
@@ -223,6 +253,8 @@ Potential features for future development:
 - Custom check intervals per device
 - Mobile app for monitoring
 - Webhooks for third-party integrations
+- Notification scheduling and quiet hours
+- Advanced analytics with charts and trends
 
 ## Support
 

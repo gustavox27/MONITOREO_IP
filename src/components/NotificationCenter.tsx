@@ -1,8 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
-import type { Database } from '../lib/database.types';
-
-type Device = Database['public']['Tables']['devices']['Row'];
 
 interface Notification {
   id: string;

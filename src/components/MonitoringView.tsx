@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { deviceService } from '../services/deviceService';
+import { notificationService } from '../services/notificationService';
 import { supabase } from '../lib/supabase';
 import { DeviceForm } from './DeviceForm';
 import { HistoryModal } from './HistoryModal';
@@ -47,8 +48,33 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showBulkMenu, setShowBulkMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    enable_notifications: true,
+    enable_sound: true,
+    group_notifications: true,
+    sound_volume: 0.4,
+    notification_duration: 10000,
+  });
   const bulkMenuRef = useRef<HTMLDivElement>(null);
   const deviceStatusRef = useRef<Map<string, string>>(new Map());
+  const statusChangeQueueRef = useRef<Array<{ device: Device; status: 'online' | 'offline' }>>([]);
+  const groupingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isPageVisibleRef = useRef(true);
+
+  useEffect(() => {
+    loadNotificationPreferences();
+  }, [userId]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isPageVisibleRef.current = !document.hidden;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -89,9 +115,12 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               const updatedDevice = payload.new as Device;
               if (device.id === updatedDevice.id) {
                 const previousStatus = deviceStatusRef.current.get(device.id);
-                if (previousStatus && previousStatus !== updatedDevice.status) {
-                  addNotification(updatedDevice, updatedDevice.status);
-                  playNotificationSound(updatedDevice.status);
+                if (
+                  previousStatus &&
+                  previousStatus !== updatedDevice.status &&
+                  (updatedDevice.status === 'online' || updatedDevice.status === 'offline')
+                ) {
+                  queueStatusChange(updatedDevice, updatedDevice.status);
                 }
                 deviceStatusRef.current.set(device.id, updatedDevice.status);
                 return updatedDevice;
@@ -126,8 +155,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
                 const previousStatus = deviceStatusRef.current.get(device.id);
                 if (previousStatus && previousStatus !== newEvent.status) {
-                  addNotification(updatedDevice, newEvent.status);
-                  playNotificationSound(newEvent.status);
+                  queueStatusChange(updatedDevice, newEvent.status);
                 }
                 deviceStatusRef.current.set(device.id, newEvent.status);
 
@@ -151,6 +179,108 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     };
   }, [filterTechnician, isAdmin]);
 
+  const loadNotificationPreferences = async () => {
+    try {
+      const preferences = await notificationService.getUserPreferences(userId);
+      if (preferences) {
+        setNotificationPreferences(preferences);
+      }
+    } catch (error) {
+      console.error('Error loading notification preferences:', error);
+    }
+  };
+
+  const processQueuedNotifications = async () => {
+    if (statusChangeQueueRef.current.length === 0) return;
+
+    const queue = statusChangeQueueRef.current;
+    statusChangeQueueRef.current = [];
+
+    if (!notificationPreferences.enable_notifications) {
+      return;
+    }
+
+    const shouldPlaySound = notificationPreferences.enable_sound;
+    const shouldGroup =
+      notificationPreferences.group_notifications && queue.length > 1;
+
+    if (shouldGroup) {
+      const offlineCount = queue.filter((q) => q.status === 'offline').length;
+      const onlineCount = queue.length - offlineCount;
+
+      if (isPageVisibleRef.current) {
+        queue.forEach((item) => {
+          addNotification(item.device, item.status);
+        });
+        if (shouldPlaySound) {
+          queue.forEach((item, index) => {
+            setTimeout(() => {
+              playNotificationSound(
+                item.status,
+                notificationPreferences.sound_volume
+              );
+            }, index * 200);
+          });
+        }
+      } else {
+        if (offlineCount > 0) {
+          const summaryNotification = queue.find(
+            (q) => q.status === 'offline'
+          );
+          if (summaryNotification) {
+            await notificationService.showNativeNotification(
+              summaryNotification.device,
+              'offline',
+              offlineCount
+            );
+            if (shouldPlaySound) {
+              notificationService.playNotificationSound(
+                'offline',
+                notificationPreferences.sound_volume
+              );
+            }
+          }
+        }
+        if (onlineCount > 0) {
+          const summaryNotification = queue.find(
+            (q) => q.status === 'online'
+          );
+          if (summaryNotification) {
+            await notificationService.showNativeNotification(
+              summaryNotification.device,
+              'online',
+              onlineCount
+            );
+            if (shouldPlaySound) {
+              notificationService.playNotificationSound(
+                'online',
+                notificationPreferences.sound_volume
+              );
+            }
+          }
+        }
+      }
+    } else {
+      for (const item of queue) {
+        if (isPageVisibleRef.current) {
+          addNotification(item.device, item.status);
+        } else {
+          await notificationService.showNativeNotification(
+            item.device,
+            item.status
+          );
+        }
+
+        if (shouldPlaySound) {
+          const playFunction = isPageVisibleRef.current
+            ? playNotificationSound
+            : notificationService.playNotificationSound;
+          playFunction(item.status, notificationPreferences.sound_volume);
+        }
+      }
+    }
+  };
+
   const addNotification = (device: Device, status: 'online' | 'offline') => {
     const notificationId = `${device.id}-${Date.now()}`;
     const newNotification: Notification = {
@@ -160,7 +290,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
       deviceIp: device.ip_address,
       status,
       timestamp: Date.now(),
-      displayDuration: 6000,
+      displayDuration: notificationPreferences.notification_duration,
     };
 
     setNotifications((prev) => [newNotification, ...prev]);
@@ -168,6 +298,18 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   const dismissNotification = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const queueStatusChange = (device: Device, status: 'online' | 'offline') => {
+    statusChangeQueueRef.current.push({ device, status });
+
+    if (groupingTimerRef.current) {
+      clearTimeout(groupingTimerRef.current);
+    }
+
+    groupingTimerRef.current = setTimeout(() => {
+      processQueuedNotifications();
+    }, 500);
   };
 
   const loadDevices = async () => {

@@ -3,11 +3,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { DashboardView } from './DashboardView';
 import { MonitoringView } from './MonitoringView';
-import { LogOut, Wifi, WifiOff, BarChart3, Monitor } from 'lucide-react';
+import { NotificationsManagement } from './NotificationsManagement';
+import { LogOut, Wifi, WifiOff, BarChart3, Monitor, Bell } from 'lucide-react';
 
 export function Dashboard() {
   const { user, profile, signOut, isAdmin } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'monitoring'>('monitoring');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'monitoring' | 'notifications'>('monitoring');
   const [agentInactive, setAgentInactive] = useState(false);
   const [agentRecovered, setAgentRecovered] = useState(false);
   const lastUpdateTimeRef = useRef<number>(Date.now());
@@ -96,6 +97,17 @@ export function Dashboard() {
                 <Monitor className="w-4 h-4" />
                 <span>Monitoreo</span>
               </button>
+              <button
+                onClick={() => setCurrentView('notifications')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition font-medium ${
+                  currentView === 'notifications'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Bell className="w-4 h-4" />
+                <span>Notificaciones</span>
+              </button>
 
               {agentInactive ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg">
@@ -122,10 +134,14 @@ export function Dashboard() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pt-24">
-        {currentView === 'dashboard' ? (
+        {currentView === 'dashboard' && (
           <DashboardView />
-        ) : (
+        )}
+        {currentView === 'monitoring' && (
           <MonitoringView userId={user!.id} isAdmin={isAdmin} />
+        )}
+        {currentView === 'notifications' && (
+          <NotificationsManagement userId={user!.id} />
         )}
       </div>
     </div>
