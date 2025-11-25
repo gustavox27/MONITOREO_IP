@@ -38,14 +38,37 @@ function playBeep(frequency: number, duration: number, volume: number = 0.3) {
   }
 }
 
-export function playNotificationSound(status: 'online' | 'offline') {
-  if (status === 'offline') {
-    playBeep(400, 0.2, 0.4);
-    setTimeout(() => playBeep(400, 0.2, 0.4), 250);
-    setTimeout(() => playBeep(400, 0.3, 0.4), 500);
+export function playNotificationSound(
+  status: 'online' | 'offline',
+  volume: number = 0.4,
+  customUrl?: string | null
+) {
+  if (customUrl) {
+    try {
+      const audio = new Audio();
+      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.src = customUrl;
+      audio.crossOrigin = 'anonymous';
+      audio.play().catch(() => {
+        playDefaultSound(status, volume);
+      });
+    } catch (error) {
+      console.log('Custom audio playback failed, using default:', error);
+      playDefaultSound(status, volume);
+    }
   } else {
-    playBeep(800, 0.2, 0.35);
-    setTimeout(() => playBeep(800, 0.2, 0.35), 150);
+    playDefaultSound(status, volume);
+  }
+}
+
+function playDefaultSound(status: 'online' | 'offline', volume: number = 0.4) {
+  if (status === 'offline') {
+    playBeep(400, 0.2, volume);
+    setTimeout(() => playBeep(400, 0.2, volume), 250);
+    setTimeout(() => playBeep(400, 0.3, volume), 500);
+  } else {
+    playBeep(800, 0.2, volume * 0.875);
+    setTimeout(() => playBeep(800, 0.2, volume * 0.875), 150);
   }
 }
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Settings, Volume2, Bell, Zap, Check, Loader } from 'lucide-react';
+import { Settings, Volume2, Bell, Zap, Check, Loader, AlertCircle, Music } from 'lucide-react';
 import { notificationService, type NotificationPreferences } from '../services/notificationService';
+import { CustomSoundUploader } from './CustomSoundUploader';
+import type { UploadResult } from '../services/audioStorageService';
 
 interface NotificationSettingsProps {
   userId: string;
@@ -13,6 +15,14 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
     group_notifications: true,
     sound_volume: 0.4,
     notification_duration: 10000,
+    enable_recurring_notifications: false,
+    recurring_interval: 30,
+    recurring_volume: 0.5,
+    use_custom_sounds: false,
+    custom_sound_online_url: null,
+    custom_sound_offline_url: null,
+    custom_sound_online_name: null,
+    custom_sound_offline_name: null,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,12 +63,65 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
 
   const handleToggle = (
     key: keyof NotificationPreferences,
-    value: boolean | number
+    value: boolean | number | string | null
   ) => {
     setPreferences((prev) => ({
       ...prev,
       [key]: value,
     }));
+  };
+
+  const handleCustomSoundUpload = (
+    soundType: 'online' | 'offline',
+    result: UploadResult
+  ) => {
+    if (soundType === 'online') {
+      setPreferences((prev) => ({
+        ...prev,
+        custom_sound_online_url: result.url,
+        custom_sound_online_name: result.name,
+        custom_sound_online_duration: result.duration,
+        use_custom_sounds: true,
+      }));
+    } else {
+      setPreferences((prev) => ({
+        ...prev,
+        custom_sound_offline_url: result.url,
+        custom_sound_offline_name: result.name,
+        custom_sound_offline_duration: result.duration,
+        use_custom_sounds: true,
+      }));
+    }
+  };
+
+  const handleDeleteCustomSound = (soundType: 'online' | 'offline') => {
+    if (soundType === 'online') {
+      setPreferences((prev) => ({
+        ...prev,
+        custom_sound_online_url: null,
+        custom_sound_online_name: null,
+        custom_sound_online_duration: null,
+      }));
+    } else {
+      setPreferences((prev) => ({
+        ...prev,
+        custom_sound_offline_url: null,
+        custom_sound_offline_name: null,
+        custom_sound_offline_duration: null,
+      }));
+    }
+
+    const hasAnySound =
+      soundType === 'online'
+        ? preferences.custom_sound_offline_url
+        : preferences.custom_sound_online_url;
+
+    if (!hasAnySound) {
+      setPreferences((prev) => ({
+        ...prev,
+        use_custom_sounds: false,
+      }));
+    }
   };
 
   if (loading) {
@@ -183,6 +246,132 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
             </span>
           </div>
         </div>
+
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-blue-600" />
+              <div>
+                <p className="font-medium text-gray-900">Notificaciones Recurrentes</p>
+                <p className="text-sm text-gray-600">Alerta cada X segundos mientras haya dispositivos desconectados</p>
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={preferences.enable_recurring_notifications}
+              onChange={(e) =>
+                handleToggle('enable_recurring_notifications', e.target.checked)
+              }
+              className="w-5 h-5 cursor-pointer rounded"
+            />
+          </div>
+
+          {preferences.enable_recurring_notifications && (
+            <div className="space-y-4 mt-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer mb-3">
+                  <AlertCircle className="w-5 h-5 text-blue-600" />
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">Intervalo de Alerta</p>
+                    <p className="text-sm text-gray-600">Cada cuántos segundos se repite la notificación</p>
+                  </div>
+                </label>
+                <div className="flex items-center gap-4 pl-8">
+                  <select
+                    value={preferences.recurring_interval}
+                    onChange={(e) =>
+                      handleToggle('recurring_interval', parseInt(e.target.value))
+                    }
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={15}>15 segundos</option>
+                    <option value={30}>30 segundos</option>
+                    <option value={60}>1 minuto</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer mb-3">
+                  <Volume2 className="w-5 h-5 text-blue-600" />
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">Volumen Reducido</p>
+                    <p className="text-sm text-gray-600">Volumen específico para notificaciones recurrentes</p>
+                  </div>
+                </label>
+                <div className="flex items-center gap-4 pl-8">
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={preferences.recurring_volume}
+                    onChange={(e) =>
+                      handleToggle('recurring_volume', parseFloat(e.target.value))
+                    }
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-medium text-gray-700 min-w-12">
+                    {Math.round(preferences.recurring_volume * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Music className="w-5 h-5 text-blue-600" />
+          <h3 className="font-semibold text-gray-900">Sonidos Personalizados</h3>
+        </div>
+
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={preferences.use_custom_sounds || false}
+              onChange={(e) => handleToggle('use_custom_sounds', e.target.checked)}
+              className="w-5 h-5 rounded"
+            />
+            <div>
+              <p className="font-medium text-gray-900">Usar Sonidos Personalizados</p>
+              <p className="text-sm text-gray-600">Sube tus propios archivos de audio para las notificaciones</p>
+            </div>
+          </label>
+        </div>
+
+        {preferences.use_custom_sounds && (
+          <div className="space-y-4">
+            <CustomSoundUploader
+              soundType="online"
+              currentUrl={preferences.custom_sound_online_url}
+              currentName={preferences.custom_sound_online_name}
+              currentDuration={preferences.custom_sound_online_duration}
+              onUploadSuccess={(result) => handleCustomSoundUpload('online', result)}
+              onDelete={() => handleDeleteCustomSound('online')}
+              volume={preferences.sound_volume}
+            />
+
+            <CustomSoundUploader
+              soundType="offline"
+              currentUrl={preferences.custom_sound_offline_url}
+              currentName={preferences.custom_sound_offline_name}
+              currentDuration={preferences.custom_sound_offline_duration}
+              onUploadSuccess={(result) => handleCustomSoundUpload('offline', result)}
+              onDelete={() => handleDeleteCustomSound('offline')}
+              volume={preferences.sound_volume}
+            />
+
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Consejo:</strong> Se recomienda usar sonidos de 2-5 segundos de duración.
+                Formatos recomendados: MP3 (compatible universal) o WAV (mejor calidad).
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-200 flex gap-3">

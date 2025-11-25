@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { deviceService } from '../services/deviceService';
 import { notificationService } from '../services/notificationService';
+import { RecurringNotificationManager } from '../services/recurringNotificationManager';
 import { supabase } from '../lib/supabase';
 import { DeviceForm } from './DeviceForm';
 import { HistoryModal } from './HistoryModal';
@@ -10,8 +11,9 @@ import { FilterControls } from './FilterControls';
 import { BulkUploadModal } from './BulkUploadModal';
 import { NotificationCenter, playNotificationSound } from './NotificationCenter';
 import * as XLSX from 'xlsx';
-import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown } from 'lucide-react';
+import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown, FileText } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
+import { exportToPDF, exportToExcel, exportToImage, exportToHTML } from '../utils/exportHelpers';
 import type { Database } from '../lib/database.types';
 
 type Device = Database['public']['Tables']['devices']['Row'];
@@ -47,6 +49,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const [sortBy, setSortBy] = useState('created_at');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showBulkMenu, setShowBulkMenu] = useState(false);
+  const [showReportMenu, setShowReportMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationPreferences, setNotificationPreferences] = useState({
     enable_notifications: true,
@@ -56,14 +59,35 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     notification_duration: 10000,
   });
   const bulkMenuRef = useRef<HTMLDivElement>(null);
+  const reportMenuRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const deviceStatusRef = useRef<Map<string, string>>(new Map());
   const statusChangeQueueRef = useRef<Array<{ device: Device; status: 'online' | 'offline' }>>([]);
   const groupingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isPageVisibleRef = useRef(true);
+  const recurringNotificationManagerRef = useRef<RecurringNotificationManager | null>(null);
 
   useEffect(() => {
     loadNotificationPreferences();
   }, [userId]);
+
+  useEffect(() => {
+    updateRecurringNotifications();
+  }, [devices]);
+
+  useEffect(() => {
+    if (recurringNotificationManagerRef.current) {
+      recurringNotificationManagerRef.current.setPreferences(
+        notificationPreferences.enable_recurring_notifications,
+        notificationPreferences.enable_sound,
+        notificationPreferences.sound_volume,
+        notificationPreferences.recurring_volume,
+        notificationPreferences.recurring_interval
+      );
+
+      updateRecurringNotifications();
+    }
+  }, [notificationPreferences]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -81,16 +105,19 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
       if (bulkMenuRef.current && !bulkMenuRef.current.contains(event.target as Node)) {
         setShowBulkMenu(false);
       }
+      if (reportMenuRef.current && !reportMenuRef.current.contains(event.target as Node)) {
+        setShowReportMenu(false);
+      }
     };
 
-    if (showBulkMenu) {
+    if (showBulkMenu || showReportMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showBulkMenu]);
+  }, [showBulkMenu, showReportMenu]);
 
   useEffect(() => {
     loadDevices();
@@ -176,6 +203,10 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
       channel.unsubscribe();
       eventsChannel.unsubscribe();
       clearInterval(timerInterval);
+      if (recurringNotificationManagerRef.current) {
+        recurringNotificationManagerRef.current.destroy();
+        recurringNotificationManagerRef.current = null;
+      }
     };
   }, [filterTechnician, isAdmin]);
 
@@ -184,10 +215,35 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
       const preferences = await notificationService.getUserPreferences(userId);
       if (preferences) {
         setNotificationPreferences(preferences);
+
+        if (!recurringNotificationManagerRef.current) {
+          recurringNotificationManagerRef.current = new RecurringNotificationManager();
+        }
+
+        recurringNotificationManagerRef.current.setPreferences(
+          preferences.enable_recurring_notifications,
+          preferences.enable_sound,
+          preferences.sound_volume,
+          preferences.recurring_volume,
+          preferences.recurring_interval
+        );
       }
     } catch (error) {
       console.error('Error loading notification preferences:', error);
     }
+  };
+
+  const updateRecurringNotifications = () => {
+    if (!recurringNotificationManagerRef.current) return;
+
+    const offlineDeviceIds = devices
+      .filter((d) => d.status === 'offline')
+      .map((d) => d.id);
+
+    recurringNotificationManagerRef.current.updateOfflineDevices(
+      offlineDeviceIds,
+      devices
+    );
   };
 
   const processQueuedNotifications = async () => {
@@ -215,9 +271,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
         if (shouldPlaySound) {
           queue.forEach((item, index) => {
             setTimeout(() => {
+              const customUrl = item.status === 'online'
+                ? notificationPreferences.custom_sound_online_url
+                : notificationPreferences.custom_sound_offline_url;
               playNotificationSound(
                 item.status,
-                notificationPreferences.sound_volume
+                notificationPreferences.sound_volume,
+                notificationPreferences.use_custom_sounds ? customUrl : undefined
               );
             }, index * 200);
           });
@@ -234,9 +294,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               offlineCount
             );
             if (shouldPlaySound) {
+              const customUrl = notificationPreferences.use_custom_sounds
+                ? notificationPreferences.custom_sound_offline_url
+                : undefined;
               notificationService.playNotificationSound(
                 'offline',
-                notificationPreferences.sound_volume
+                notificationPreferences.sound_volume,
+                customUrl || undefined
               );
             }
           }
@@ -252,9 +316,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               onlineCount
             );
             if (shouldPlaySound) {
+              const customUrl = notificationPreferences.use_custom_sounds
+                ? notificationPreferences.custom_sound_online_url
+                : undefined;
               notificationService.playNotificationSound(
                 'online',
-                notificationPreferences.sound_volume
+                notificationPreferences.sound_volume,
+                customUrl || undefined
               );
             }
           }
@@ -272,10 +340,17 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
         }
 
         if (shouldPlaySound) {
+          const customUrl = item.status === 'online'
+            ? notificationPreferences.custom_sound_online_url
+            : notificationPreferences.custom_sound_offline_url;
           const playFunction = isPageVisibleRef.current
             ? playNotificationSound
             : notificationService.playNotificationSound;
-          playFunction(item.status, notificationPreferences.sound_volume);
+          playFunction(
+            item.status,
+            notificationPreferences.sound_volume,
+            notificationPreferences.use_custom_sounds ? customUrl : undefined
+          );
         }
       }
     }
@@ -367,6 +442,28 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const handleFormClose = () => {
     setShowForm(false);
     setEditingDevice(null);
+  };
+
+  const handleExportPDF = () => {
+    exportToPDF(filteredDevices);
+    setShowReportMenu(false);
+  };
+
+  const handleExportExcel = () => {
+    exportToExcel(filteredDevices);
+    setShowReportMenu(false);
+  };
+
+  const handleExportImage = async () => {
+    if (tableRef.current) {
+      await exportToImage(tableRef.current);
+    }
+    setShowReportMenu(false);
+  };
+
+  const handleExportHTML = () => {
+    exportToHTML(filteredDevices);
+    setShowReportMenu(false);
   };
 
   const getStatusColor = (status: string) => {
@@ -578,6 +675,46 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               </div>
             )}
           </div>
+
+          <div className="relative" ref={reportMenuRef}>
+            <button
+              onClick={() => setShowReportMenu(!showReportMenu)}
+              className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-lg hover:bg-amber-700 transition font-medium"
+            >
+              <FileText className="w-5 h-5" />
+              <span>Reporte</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+
+            {showReportMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  PDF
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Excel
+                </button>
+                <button
+                  onClick={handleExportImage}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Imagen
+                </button>
+                <button
+                  onClick={handleExportHTML}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"
+                >
+                  Página HTML
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -608,7 +745,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table ref={tableRef} className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">

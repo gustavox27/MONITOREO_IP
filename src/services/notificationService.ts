@@ -9,6 +9,16 @@ export interface NotificationPreferences {
   group_notifications: boolean;
   sound_volume: number;
   notification_duration: number;
+  enable_recurring_notifications: boolean;
+  recurring_interval: number;
+  recurring_volume: number;
+  use_custom_sounds?: boolean;
+  custom_sound_online_url?: string | null;
+  custom_sound_offline_url?: string | null;
+  custom_sound_online_name?: string | null;
+  custom_sound_offline_name?: string | null;
+  custom_sound_online_duration?: number | null;
+  custom_sound_offline_duration?: number | null;
 }
 
 export const notificationService = {
@@ -92,7 +102,34 @@ export const notificationService = {
     }
   },
 
-  playNotificationSound(status: 'online' | 'offline', volume: number = 0.4): void {
+  playNotificationSound(
+    status: 'online' | 'offline',
+    volume: number = 0.4,
+    customSoundUrl?: string
+  ): void {
+    if (customSoundUrl) {
+      this.playCustomNotificationSound(customSoundUrl, volume);
+      return;
+    }
+
+    this.playDefaultNotificationSound(status, volume);
+  },
+
+  async playCustomNotificationSound(url: string, volume: number = 0.4): Promise<void> {
+    try {
+      const audio = new Audio();
+      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.src = url;
+      audio.crossOrigin = 'anonymous';
+
+      await audio.play();
+    } catch (error) {
+      console.log('Custom audio playback failed, falling back to default:', error);
+      this.playDefaultNotificationSound('offline', volume);
+    }
+  },
+
+  playDefaultNotificationSound(status: 'online' | 'offline', volume: number = 0.4): void {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -148,6 +185,76 @@ export const notificationService = {
       }
     } catch (error) {
       console.log('Audio playback not supported:', error);
+    }
+  },
+
+  playRecurringNotificationSound(volume: number = 0.25): void {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+
+      osc.frequency.value = 350;
+      osc.type = 'sine';
+
+      const startTime = audioContext.currentTime;
+      const duration = 0.15;
+
+      gain.gain.setValueAtTime(volume, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    } catch (error) {
+      console.log('Audio playback not supported:', error);
+    }
+  },
+
+  async showRecurringNotification(
+    deviceNames: string[],
+    deviceCount: number
+  ): Promise<void> {
+    if (!this.canShowNotifications() || !('serviceWorker' in navigator)) {
+      return;
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const tag = 'recurring-offline-devices';
+
+      const notificationOptions = {
+        icon: '/notification-icon.svg',
+        badge: '/notification-badge.svg',
+        tag,
+        requireInteraction: false,
+        silent: true,
+        data: {
+          isRecurring: true,
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      const deviceList = deviceNames.join(', ');
+      const title = `${deviceCount} dispositivo${deviceCount !== 1 ? 's' : ''} desconectado${deviceCount !== 1 ? 's' : ''}`;
+      const body = deviceList;
+
+      await registration.showNotification(title, {
+        ...notificationOptions,
+        body,
+      } as NotificationOptions);
+
+      setTimeout(() => {
+        registration.getNotifications({ tag }).then((notifications) => {
+          notifications.forEach((notification) => {
+            notification.close();
+          });
+        });
+      }, 5000);
+    } catch (error) {
+      console.error('Error showing recurring notification:', error);
     }
   },
 

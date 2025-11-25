@@ -96,6 +96,71 @@ export interface Database {
           timestamp?: string
         }
       }
+      notification_preferences: {
+        Row: {
+          id: string
+          user_id: string
+          enable_notifications: boolean
+          enable_sound: boolean
+          group_notifications: boolean
+          sound_volume: number
+          notification_duration: number
+          enable_recurring_notifications: boolean
+          recurring_interval: number
+          recurring_volume: number
+          use_custom_sounds: boolean
+          custom_sound_online_url: string | null
+          custom_sound_offline_url: string | null
+          custom_sound_online_name: string | null
+          custom_sound_offline_name: string | null
+          custom_sound_online_duration: number | null
+          custom_sound_offline_duration: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          enable_notifications?: boolean
+          enable_sound?: boolean
+          group_notifications?: boolean
+          sound_volume?: number
+          notification_duration?: number
+          enable_recurring_notifications?: boolean
+          recurring_interval?: number
+          recurring_volume?: number
+          use_custom_sounds?: boolean
+          custom_sound_online_url?: string | null
+          custom_sound_offline_url?: string | null
+          custom_sound_online_name?: string | null
+          custom_sound_offline_name?: string | null
+          custom_sound_online_duration?: number | null
+          custom_sound_offline_duration?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          enable_notifications?: boolean
+          enable_sound?: boolean
+          group_notifications?: boolean
+          sound_volume?: number
+          notification_duration?: number
+          enable_recurring_notifications?: boolean
+          recurring_interval?: number
+          recurring_volume?: number
+          use_custom_sounds?: boolean
+          custom_sound_online_url?: string | null
+          custom_sound_offline_url?: string | null
+          custom_sound_online_name?: string | null
+          custom_sound_offline_name?: string | null
+          custom_sound_online_duration?: number | null
+          custom_sound_offline_duration?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }
