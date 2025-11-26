@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Settings, Volume2, Bell, Zap, Check, Loader, AlertCircle, Music } from 'lucide-react';
 import { notificationService, type NotificationPreferences } from '../services/notificationService';
 import { CustomSoundUploader } from './CustomSoundUploader';
+import { AudioStatusIndicator } from './AudioStatusIndicator';
 import type { UploadResult } from '../services/audioStorageService';
 
 interface NotificationSettingsProps {
@@ -155,9 +156,12 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Settings className="w-5 h-5 text-blue-600" />
-        <h3 className="font-semibold text-gray-900">Configuración de Notificaciones</h3>
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <div className="flex items-center gap-2">
+          <Settings className="w-5 h-5 text-blue-600" />
+          <h3 className="font-semibold text-gray-900">Configuración de Notificaciones</h3>
+        </div>
+        <AudioStatusIndicator />
       </div>
 
       <div className="space-y-4">

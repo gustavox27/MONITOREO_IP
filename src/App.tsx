@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage, RegisterPage } from './components/AuthPages';
 import { Dashboard } from './components/Dashboard';
+import { AudioInitializationBanner } from './components/AudioInitializationBanner';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -74,6 +75,7 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
+      <AudioInitializationBanner />
       <AppContent />
     </AuthProvider>
   );

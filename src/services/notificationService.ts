@@ -1,6 +1,7 @@
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
 import { isValidCustomSoundUrl } from '../utils/audioValidation';
+import { audioContextManager } from './audioContextManager';
 
 type Device = Database['public']['Tables']['devices']['Row'];
 
@@ -199,12 +200,11 @@ export const notificationService = {
 
   playDefaultNotificationSound(status: 'online' | 'offline', volume: number = 0.4): void {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      const audioContext = audioContextManager.getContext();
+      if (!audioContext || audioContext.state !== 'running') {
+        console.warn('[Notification Sound] AudioContext not available or not running');
+        return;
+      }
 
       if (status === 'offline') {
         const notes = [400, 400, 400];
@@ -258,7 +258,12 @@ export const notificationService = {
 
   playRecurringNotificationSound(volume: number = 0.25): void {
     try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioContext = audioContextManager.getContext();
+      if (!audioContext || audioContext.state !== 'running') {
+        console.warn('[Recurring Sound] AudioContext not available or not running');
+        return;
+      }
+
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import { isValidCustomSoundUrl } from '../utils/audioValidation';
+import { audioContextManager } from '../services/audioContextManager';
 
 interface Notification {
   id: string;
@@ -19,7 +20,12 @@ interface NotificationCenterProps {
 
 function playBeep(frequency: number, duration: number, volume: number = 0.3) {
   try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const audioContext = audioContextManager.getContext();
+    if (!audioContext || audioContext.state !== 'running') {
+      console.warn('[Beep] AudioContext not available or not running');
+      return;
+    }
+
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 

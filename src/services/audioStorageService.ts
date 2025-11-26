@@ -198,10 +198,18 @@ export const audioStorageService = {
           reject(new Error('Failed to play audio'));
         };
 
-        audio.play().catch((error) => {
-          console.error(`[Audio Playback] Play method failed:`, error);
-          reject(error);
-        });
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.error(`[Audio Playback] Play method failed:`, error);
+            if (error.name === 'NotAllowedError') {
+              console.error(`[Audio Playback] Autoplay blocked. User interaction required.`);
+              reject(new Error('Audio playback requires user interaction. Please click to enable audio.'));
+            } else {
+              reject(error);
+            }
+          });
+        }
       } catch (error) {
         console.error(`[Audio Playback] Exception during playback setup:`, error);
         reject(error);
