@@ -86,13 +86,24 @@ export function CustomSoundUploader({
   };
 
   const handleTestPlay = async () => {
-    if (!currentUrl) return;
+    if (!currentUrl) {
+      console.error('[CustomSoundUploader] No URL available for test playback');
+      return;
+    }
 
     setTestPlaying(true);
     try {
+      console.log(`[CustomSoundUploader] Starting test playback for ${soundType} sound`);
+      console.log(`[CustomSoundUploader] URL: ${currentUrl}`);
+      console.log(`[CustomSoundUploader] Volume: ${volume * 100}%`);
+
       await audioStorageService.playAudio(currentUrl, volume);
+
+      console.log(`[CustomSoundUploader] Test playback completed successfully`);
     } catch (err) {
-      console.error('Error playing test audio:', err);
+      console.error('[CustomSoundUploader] Error playing test audio:', err);
+      setError(err instanceof Error ? err.message : 'Error al reproducir el audio de prueba');
+      setTimeout(() => setError(null), 5000);
     } finally {
       setTestPlaying(false);
     }

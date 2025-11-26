@@ -21,12 +21,16 @@ export interface UploadResult {
 
 export const audioStorageService = {
   async validateAudioFile(file: File): Promise<{ valid: boolean; error?: string; info?: AudioFileInfo }> {
+    console.log(`[Audio Validation] Starting file validation for: ${file.name}, size: ${(file.size / 1024).toFixed(2)}KB, type: ${file.type}`);
+
     if (!file) {
+      console.error('[Audio Validation] No file provided');
       return { valid: false, error: 'No file provided' };
     }
 
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
     if (!SUPPORTED_EXTENSIONS.includes(fileExtension)) {
+      console.error(`[Audio Validation] Unsupported format: ${fileExtension}`);
       return {
         valid: false,
         error: `Formato no soportado. Usa: ${SUPPORTED_EXTENSIONS.join(', ')}`
@@ -34,6 +38,7 @@ export const audioStorageService = {
     }
 
     if (file.size > MAX_FILE_SIZE) {
+      console.error(`[Audio Validation] File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
       return {
         valid: false,
         error: `Archivo demasiado grande. Máximo: 5MB (Tu archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB)`
@@ -42,13 +47,17 @@ export const audioStorageService = {
 
     try {
       const duration = await this.getAudioDuration(file);
+      console.log(`[Audio Validation] Audio duration detected: ${duration.toFixed(2)}s`);
+
       if (duration > MAX_DURATION) {
+        console.error(`[Audio Validation] Duration too long: ${duration.toFixed(2)}s`);
         return {
           valid: false,
           error: `Duración demasiada larga. Máximo: ${MAX_DURATION}s (Tu archivo: ${duration.toFixed(1)}s)`
         };
       }
 
+      console.log(`[Audio Validation] File validation successful`);
       return {
         valid: true,
         info: {
@@ -58,6 +67,7 @@ export const audioStorageService = {
         }
       };
     } catch (error) {
+      console.error('[Audio Validation] Error reading audio duration:', error);
       return {
         valid: false,
         error: 'No se pudo leer la duración del archivo. Intenta con otro archivo.'
@@ -202,31 +212,62 @@ export const audioStorageService = {
   async validateAudioUrl(url: string): Promise<boolean> {
     return new Promise((resolve) => {
       try {
-        console.log(`[Audio Validation] Validating URL: ${url}`);
+        console.log(`[Audio Validation] Validating URL accessibility: ${url}`);
         const audio = new Audio();
         audio.crossOrigin = 'anonymous';
 
-        const timeout = setTimeout(() => {
-          console.warn(`[Audio Validation] Validation timeout for: ${url}`);
-          resolve(false);
-        }, 5000);
+        let timeoutId: NodeJS.Timeout | null = null;
+        let resolved = false;
 
-        audio.oncanplay = () => {
-          clearTimeout(timeout);
-          console.log(`[Audio Validation] URL validation successful: ${url}`);
-          resolve(true);
+        const cleanup = () => {
+          if (timeoutId) clearTimeout(timeoutId);
+          audio.src = '';
+          audio.oncanplay = null;
+          audio.onerror = null;
+          audio.onloadstart = null;
         };
 
-        audio.onerror = () => {
-          clearTimeout(timeout);
-          console.error(`[Audio Validation] URL validation failed: ${url}`);
-          resolve(false);
+        timeoutId = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            console.warn(`[Audio Validation] URL validation timeout (5s) for: ${url}`);
+            resolve(false);
+          }
+        }, 5000);
+
+        audio.onloadstart = () => {
+          console.log(`[Audio Validation] URL started loading: ${url}`);
+        };
+
+        audio.oncanplay = () => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            console.log(`[Audio Validation] URL validation successful (canplay event): ${url}`);
+            console.log(`[Audio Validation] Audio duration: ${audio.duration}s, readyState: ${audio.readyState}`);
+            resolve(true);
+          }
+        };
+
+        audio.onerror = (e) => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            const errorMsg = audio.error?.message || 'Unknown error';
+            const errorCode = audio.error?.code || 'UNKNOWN';
+            console.error(`[Audio Validation] URL validation failed for: ${url}`);
+            console.error(`[Audio Validation] Error details - Code: ${errorCode}, Message: ${errorMsg}`);
+            console.error(`[Audio Validation] Network state: ${audio.networkState}, ReadyState: ${audio.readyState}`);
+            resolve(false);
+          }
         };
 
         audio.src = url;
+        console.log(`[Audio Validation] Starting audio load for URL: ${url}`);
         audio.load();
       } catch (error) {
-        console.error(`[Audio Validation] Exception during validation:`, error);
+        console.error(`[Audio Validation] Exception during URL validation:`, error);
         resolve(false);
       }
     });

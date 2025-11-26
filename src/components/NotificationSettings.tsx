@@ -38,18 +38,22 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
       console.log(`[NotificationSettings] Loading preferences for user: ${userId}`);
       const userPrefs = await notificationService.getUserPreferences(userId);
       if (userPrefs) {
-        console.log(`[NotificationSettings] Preferences loaded:`, {
+        console.log(`[NotificationSettings] Preferences loaded successfully:`, {
           use_custom_sounds: userPrefs.use_custom_sounds,
           custom_sound_online_url: userPrefs.custom_sound_online_url ? 'SET' : 'NOT SET',
           custom_sound_offline_url: userPrefs.custom_sound_offline_url ? 'SET' : 'NOT SET',
+          custom_sound_online_name: userPrefs.custom_sound_online_name,
+          custom_sound_offline_name: userPrefs.custom_sound_offline_name,
           sound_volume: userPrefs.sound_volume
         });
         setPreferences(userPrefs);
       } else {
-        console.log(`[NotificationSettings] No preferences found for user: ${userId}`);
+        console.log(`[NotificationSettings] No preferences found for user: ${userId}, initializing defaults`);
       }
     } catch (error) {
       console.error('[NotificationSettings] Error loading preferences:', error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
     } finally {
       setLoading(false);
     }

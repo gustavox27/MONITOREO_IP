@@ -219,12 +219,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   const loadNotificationPreferences = async () => {
     try {
+      console.log('[MonitoringView] Loading notification preferences...');
       const preferences = await notificationService.getUserPreferences(userId);
       if (preferences) {
         const onlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_online_url);
         const offlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_offline_url);
 
-        console.log('[MonitoringView] Loaded preferences:', {
+        console.log('[MonitoringView] Preferences loaded successfully:', {
           use_custom_sounds: preferences.use_custom_sounds,
           online_url_valid: onlineUrlValid,
           offline_url_valid: offlineUrlValid,

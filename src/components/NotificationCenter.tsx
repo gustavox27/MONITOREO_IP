@@ -48,28 +48,49 @@ export function playNotificationSound(
   const hasValidUrl = isValidCustomSoundUrl(customUrl);
   const shouldUseCustom = isCustom && hasValidUrl;
 
-  console.log(`[NotificationCenter] Sound request: status=${status}, isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, customUrl=${customUrl || 'none'}`);
+  console.log(`[NotificationCenter] Sound request: status=${status}, isCustom=${isCustom}, hasValidUrl=${hasValidUrl}`);
+  console.log(`[NotificationCenter] Custom URL provided: ${customUrl ? 'YES' : 'NO'}`);
 
   if (shouldUseCustom) {
     try {
-      console.log(`[NotificationCenter] Playing custom sound from: ${customUrl}`);
+      console.log(`[NotificationCenter] Attempting to play custom sound from: ${customUrl}`);
       const audio = new Audio();
       audio.volume = Math.max(0, Math.min(1, volume));
-      audio.src = customUrl;
       audio.crossOrigin = 'anonymous';
 
+      let audioErrorOccurred = false;
+
       audio.onloadstart = () => {
-        console.log(`[NotificationCenter] Audio loading started for: ${customUrl}`);
+        console.log(`[NotificationCenter] Audio loading started`);
+      };
+
+      audio.onprogress = () => {
+        console.log(`[NotificationCenter] Audio data being downloaded`);
       };
 
       audio.oncanplay = () => {
-        console.log(`[NotificationCenter] Audio ready to play from: ${customUrl}`);
+        console.log(`[NotificationCenter] Audio ready to play. Duration: ${audio.duration}s, ReadyState: ${audio.readyState}`);
       };
 
       audio.onerror = () => {
-        console.error(`[NotificationCenter] Custom audio failed to load (${audio.error?.message}), falling back to default`);
+        audioErrorOccurred = true;
+        const errorCode = audio.error?.code || 'UNKNOWN';
+        const errorMsg = audio.error?.message || 'Unknown error';
+
+        console.error(`[NotificationCenter] Custom audio failed to load`);
+        console.error(`[NotificationCenter] Error code: ${errorCode}, Message: ${errorMsg}`);
+        console.error(`[NotificationCenter] Network state: ${audio.networkState}, Ready state: ${audio.readyState}`);
+        console.error(`[NotificationCenter] URL: ${customUrl}`);
+        console.error(`[NotificationCenter] Falling back to default sound`);
+
         playDefaultSound(status, volume);
       };
+
+      audio.onended = () => {
+        console.log(`[NotificationCenter] Audio playback ended`);
+      };
+
+      audio.src = customUrl;
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -78,7 +99,9 @@ export function playNotificationSound(
             console.log(`[NotificationCenter] Custom audio playback started successfully`);
           })
           .catch((error) => {
-            console.error(`[NotificationCenter] Custom audio playback failed:`, error);
+            audioErrorOccurred = true;
+            console.error(`[NotificationCenter] Custom audio playback failed:`, error.message);
+            console.error(`[NotificationCenter] Error type:`, error.name);
             playDefaultSound(status, volume);
           });
       }
