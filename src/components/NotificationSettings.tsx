@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Settings, Volume2, Bell, Zap, Check, Loader, AlertCircle, Music, Unlock } from 'lucide-react';
+import { Settings, Volume2, Bell, Zap, Check, Loader, AlertCircle, Music } from 'lucide-react';
 import { notificationService, type NotificationPreferences } from '../services/notificationService';
-import { audioInitializationService, type AudioInitState } from '../services/audioInitializationService';
 import { CustomSoundUploader } from './CustomSoundUploader';
-import { AudioStatusIndicator } from './AudioStatusIndicator';
 import type { UploadResult } from '../services/audioStorageService';
 
 interface NotificationSettingsProps {
@@ -29,49 +27,20 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [audioState, setAudioState] = useState<AudioInitState>({
-    isReady: false,
-    isUnlocked: false,
-    isLoading: false,
-    error: null,
-  });
 
   useEffect(() => {
     loadPreferences();
-    const unsubscribe = audioInitializationService.subscribe(setAudioState);
-    return unsubscribe;
   }, [userId]);
 
   const loadPreferences = async () => {
     setLoading(true);
     try {
-      console.log(`[NotificationSettings] Loading preferences for user: ${userId}`);
       const userPrefs = await notificationService.getUserPreferences(userId);
       if (userPrefs) {
-        console.log(`[NotificationSettings] Preferences loaded successfully:`, {
-          use_custom_sounds: userPrefs.use_custom_sounds,
-          custom_sound_online_url: userPrefs.custom_sound_online_url ? 'SET' : 'NOT SET',
-          custom_sound_offline_url: userPrefs.custom_sound_offline_url ? 'SET' : 'NOT SET',
-          custom_sound_online_name: userPrefs.custom_sound_online_name,
-          custom_sound_offline_name: userPrefs.custom_sound_offline_name,
-          sound_volume: userPrefs.sound_volume
-        });
         setPreferences(userPrefs);
-
-        if (userPrefs.use_custom_sounds && (userPrefs.custom_sound_online_url || userPrefs.custom_sound_offline_url)) {
-          console.log('[NotificationSettings] Preloading custom sounds');
-          await audioInitializationService.preloadCustomSounds(
-            userPrefs.custom_sound_online_url,
-            userPrefs.custom_sound_offline_url
-          );
-        }
-      } else {
-        console.log(`[NotificationSettings] No preferences found for user: ${userId}, initializing defaults`);
       }
     } catch (error) {
-      console.error('[NotificationSettings] Error loading preferences:', error);
-      setSaveStatus('error');
-      setTimeout(() => setSaveStatus('idle'), 3000);
+      console.error('Error loading preferences:', error);
     } finally {
       setLoading(false);
     }
@@ -80,32 +49,11 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
   const handleSavePreferences = async () => {
     setSaving(true);
     try {
-      console.log(`[NotificationSettings] Saving preferences for user: ${userId}`, {
-        use_custom_sounds: preferences.use_custom_sounds,
-        custom_sound_online_url: preferences.custom_sound_online_url ? 'SET' : 'NOT SET',
-        custom_sound_offline_url: preferences.custom_sound_offline_url ? 'SET' : 'NOT SET',
-        sound_volume: preferences.sound_volume
-      });
-
-      if (preferences.enable_notifications || preferences.enable_sound) {
-        console.log('[NotificationSettings] Notifications enabled, unlocking audio');
-        await audioInitializationService.unlockAudio();
-      }
-
-      if (preferences.use_custom_sounds && (preferences.custom_sound_online_url || preferences.custom_sound_offline_url)) {
-        console.log('[NotificationSettings] Preloading custom sounds after save');
-        await audioInitializationService.preloadCustomSounds(
-          preferences.custom_sound_online_url,
-          preferences.custom_sound_offline_url
-        );
-      }
-
       await notificationService.updateUserPreferences(userId, preferences);
-      console.log(`[NotificationSettings] Preferences saved successfully`);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
-      console.error('[NotificationSettings] Error saving preferences:', error);
+      console.error('Error saving preferences:', error);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } finally {
@@ -123,7 +71,7 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
     }));
   };
 
-  const handleCustomSoundUpload = async (
+  const handleCustomSoundUpload = (
     soundType: 'online' | 'offline',
     result: UploadResult
   ) => {
@@ -144,12 +92,6 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
         use_custom_sounds: true,
       }));
     }
-
-    console.log('[NotificationSettings] Preloading newly uploaded sound');
-    await audioInitializationService.preloadCustomSounds(
-      soundType === 'online' ? result.url : preferences.custom_sound_online_url,
-      soundType === 'offline' ? result.url : preferences.custom_sound_offline_url
-    );
   };
 
   const handleDeleteCustomSound = (soundType: 'online' | 'offline') => {
@@ -193,12 +135,9 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
-      <div className="flex items-center justify-between gap-2 mb-6">
-        <div className="flex items-center gap-2">
-          <Settings className="w-5 h-5 text-blue-600" />
-          <h3 className="font-semibold text-gray-900">Configuración de Notificaciones</h3>
-        </div>
-        <AudioStatusIndicator />
+      <div className="flex items-center gap-2 mb-6">
+        <Settings className="w-5 h-5 text-blue-600" />
+        <h3 className="font-semibold text-gray-900">Configuración de Notificaciones</h3>
       </div>
 
       <div className="space-y-4">
@@ -388,11 +327,7 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
           <h3 className="font-semibold text-gray-900">Sonidos Personalizados</h3>
         </div>
 
-        <div className={`mb-4 p-4 rounded-lg border ${
-          preferences.use_custom_sounds
-            ? 'bg-green-50 border-green-200'
-            : 'bg-blue-50 border-blue-200'
-        }`}>
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -401,15 +336,7 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
               className="w-5 h-5 rounded"
             />
             <div>
-              <div className="flex items-center gap-2">
-                <p className="font-medium text-gray-900">Usar Sonidos Personalizados</p>
-                {preferences.use_custom_sounds && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-200 text-green-800">
-                    <span className="w-2 h-2 bg-green-600 rounded-full"></span>
-                    Activo
-                  </span>
-                )}
-              </div>
+              <p className="font-medium text-gray-900">Usar Sonidos Personalizados</p>
               <p className="text-sm text-gray-600">Sube tus propios archivos de audio para las notificaciones</p>
             </div>
           </label>
@@ -419,7 +346,6 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
           <div className="space-y-4">
             <CustomSoundUploader
               soundType="online"
-              userId={userId}
               currentUrl={preferences.custom_sound_online_url}
               currentName={preferences.custom_sound_online_name}
               currentDuration={preferences.custom_sound_online_duration}
@@ -430,7 +356,6 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
 
             <CustomSoundUploader
               soundType="offline"
-              userId={userId}
               currentUrl={preferences.custom_sound_offline_url}
               currentName={preferences.custom_sound_offline_name}
               currentDuration={preferences.custom_sound_offline_duration}
@@ -450,28 +375,6 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
       </div>
 
       <div className="mt-6 pt-6 border-t border-gray-200 flex gap-3">
-        {!audioState.isUnlocked && (
-          <button
-            onClick={async () => {
-              await audioInitializationService.unlockAudio();
-            }}
-            disabled={audioState.isLoading}
-            className="flex items-center justify-center gap-2 bg-amber-600 text-white px-4 py-3 rounded-lg hover:bg-amber-700 transition font-medium disabled:opacity-50"
-          >
-            {audioState.isLoading ? (
-              <>
-                <Loader className="w-4 h-4 animate-spin" />
-                <span>Desbloqueando audio...</span>
-              </>
-            ) : (
-              <>
-                <Unlock className="w-4 h-4" />
-                <span>Desbloquear Audio</span>
-              </>
-            )}
-          </button>
-        )}
-
         <button
           onClick={handleSavePreferences}
           disabled={saving}

@@ -1,7 +1,5 @@
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
-import { isValidCustomSoundUrl } from '../utils/audioValidation';
-import { audioContextManager } from './audioContextManager';
 
 type Device = Database['public']['Tables']['devices']['Row'];
 
@@ -107,57 +105,38 @@ export const notificationService = {
   playNotificationSound(
     status: 'online' | 'offline',
     volume: number = 0.4,
-    customSoundUrl?: string | null,
-    isCustom: boolean = false
+    customSoundUrl?: string
   ): void {
-    const hasValidUrl = isValidCustomSoundUrl(customSoundUrl);
-    const shouldUseCustom = isCustom && hasValidUrl;
-
-    console.log(`[Notification Sound] Sound request: status=${status}, isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customSoundUrl || 'none'}`);
-
-    if (shouldUseCustom) {
-      console.log(`[Notification Sound] Playing custom ${status} sound from: ${customSoundUrl}`);
-      this.playCustomNotificationSound(customSoundUrl, volume, status);
+    if (customSoundUrl) {
+      this.playCustomNotificationSound(customSoundUrl, volume);
       return;
     }
 
-    if (isCustom && !hasValidUrl) {
-      console.warn(`[Notification Sound] Custom sound enabled but URL is invalid: ${customSoundUrl}`);
-    }
-
-    console.log(`[Notification Sound] Playing default ${status} sound`);
     this.playDefaultNotificationSound(status, volume);
   },
 
-  playCustomNotificationSound(url: string, volume: number = 0.4, status: 'online' | 'offline' = 'offline'): void {
-    if (!isValidCustomSoundUrl(url)) {
-      console.warn(`[Custom Sound] Invalid URL provided, falling back to default:`, url);
-      this.playDefaultNotificationSound(status, volume);
-      return;
-    }
-
+  async playCustomNotificationSound(url: string, volume: number = 0.4): Promise<void> {
     try {
-      console.log(`[Custom Sound] Attempting to play custom audio from AudioContext buffer`);
-      const success = audioContextManager.playAudioBuffer(status, volume);
+      const audio = new Audio();
+      audio.volume = Math.max(0, Math.min(1, volume));
+      audio.src = url;
+      audio.crossOrigin = 'anonymous';
 
-      if (!success) {
-        console.warn(`[Custom Sound] AudioContext playback failed, falling back to default sound`);
-        this.playDefaultNotificationSound(status, volume);
-      }
+      await audio.play();
     } catch (error) {
-      console.error(`[Custom Sound] Exception during AudioContext playback:`, error);
-      console.error(`[Custom Sound] Exception type:`, error instanceof Error ? error.message : 'Unknown');
-      this.playDefaultNotificationSound(status, volume);
+      console.log('Custom audio playback failed, falling back to default:', error);
+      this.playDefaultNotificationSound('offline', volume);
     }
   },
 
   playDefaultNotificationSound(status: 'online' | 'offline', volume: number = 0.4): void {
     try {
-      const audioContext = audioContextManager.getContext();
-      if (!audioContext || audioContext.state !== 'running') {
-        console.warn('[Notification Sound] AudioContext not available or not running');
-        return;
-      }
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
 
       if (status === 'offline') {
         const notes = [400, 400, 400];
@@ -211,12 +190,7 @@ export const notificationService = {
 
   playRecurringNotificationSound(volume: number = 0.25): void {
     try {
-      const audioContext = audioContextManager.getContext();
-      if (!audioContext || audioContext.state !== 'running') {
-        console.warn('[Recurring Sound] AudioContext not available or not running');
-        return;
-      }
-
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
 

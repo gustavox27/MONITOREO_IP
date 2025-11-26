@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
-import { isValidCustomSoundUrl } from '../utils/audioValidation';
-import { audioContextManager } from '../services/audioContextManager';
 
 interface Notification {
   id: string;
@@ -20,12 +18,7 @@ interface NotificationCenterProps {
 
 function playBeep(frequency: number, duration: number, volume: number = 0.3) {
   try {
-    const audioContext = audioContextManager.getContext();
-    if (!audioContext || audioContext.state !== 'running') {
-      console.warn('[Beep] AudioContext not available or not running');
-      return;
-    }
-
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
 
@@ -48,78 +41,22 @@ function playBeep(frequency: number, duration: number, volume: number = 0.3) {
 export function playNotificationSound(
   status: 'online' | 'offline',
   volume: number = 0.4,
-  customUrl?: string | null,
-  isCustom: boolean = false
+  customUrl?: string | null
 ) {
-  const hasValidUrl = isValidCustomSoundUrl(customUrl);
-  const shouldUseCustom = isCustom && hasValidUrl;
-
-  console.log(`[NotificationCenter] Sound request: status=${status}, isCustom=${isCustom}, hasValidUrl=${hasValidUrl}`);
-  console.log(`[NotificationCenter] Custom URL provided: ${customUrl ? 'YES' : 'NO'}`);
-
-  if (shouldUseCustom) {
+  if (customUrl) {
     try {
-      console.log(`[NotificationCenter] Attempting to play custom sound from: ${customUrl}`);
       const audio = new Audio();
       audio.volume = Math.max(0, Math.min(1, volume));
-      audio.crossOrigin = 'anonymous';
-
-      let audioErrorOccurred = false;
-
-      audio.onloadstart = () => {
-        console.log(`[NotificationCenter] Audio loading started`);
-      };
-
-      audio.onprogress = () => {
-        console.log(`[NotificationCenter] Audio data being downloaded`);
-      };
-
-      audio.oncanplay = () => {
-        console.log(`[NotificationCenter] Audio ready to play. Duration: ${audio.duration}s, ReadyState: ${audio.readyState}`);
-      };
-
-      audio.onerror = () => {
-        audioErrorOccurred = true;
-        const errorCode = audio.error?.code || 'UNKNOWN';
-        const errorMsg = audio.error?.message || 'Unknown error';
-
-        console.error(`[NotificationCenter] Custom audio failed to load`);
-        console.error(`[NotificationCenter] Error code: ${errorCode}, Message: ${errorMsg}`);
-        console.error(`[NotificationCenter] Network state: ${audio.networkState}, Ready state: ${audio.readyState}`);
-        console.error(`[NotificationCenter] URL: ${customUrl}`);
-        console.error(`[NotificationCenter] Falling back to default sound`);
-
-        playDefaultSound(status, volume);
-      };
-
-      audio.onended = () => {
-        console.log(`[NotificationCenter] Audio playback ended`);
-      };
-
       audio.src = customUrl;
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log(`[NotificationCenter] Custom audio playback started successfully`);
-          })
-          .catch((error) => {
-            audioErrorOccurred = true;
-            console.error(`[NotificationCenter] Custom audio playback failed:`, error.message);
-            console.error(`[NotificationCenter] Error type:`, error.name);
-            playDefaultSound(status, volume);
-          });
-      }
+      audio.crossOrigin = 'anonymous';
+      audio.play().catch(() => {
+        playDefaultSound(status, volume);
+      });
     } catch (error) {
-      console.error(`[NotificationCenter] Exception playing custom audio:`, error);
+      console.log('Custom audio playback failed, using default:', error);
       playDefaultSound(status, volume);
     }
   } else {
-    if (isCustom && !hasValidUrl) {
-      console.warn(`[NotificationCenter] Custom sound enabled but URL is invalid: ${customUrl}`);
-    }
-    console.log(`[NotificationCenter] Playing default sound for ${status}`);
     playDefaultSound(status, volume);
   }
 }

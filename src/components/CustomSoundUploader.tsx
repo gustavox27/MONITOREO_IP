@@ -8,11 +8,9 @@ import {
   RECOMMENDED_DURATION,
   type UploadResult
 } from '../services/audioStorageService';
-import { audioInitializationService } from '../services/audioInitializationService';
 
 interface CustomSoundUploaderProps {
   soundType: 'online' | 'offline';
-  userId: string;
   currentUrl?: string | null;
   currentName?: string | null;
   currentDuration?: number | null;
@@ -23,7 +21,6 @@ interface CustomSoundUploaderProps {
 
 export function CustomSoundUploader({
   soundType,
-  userId,
   currentUrl,
   currentName,
   currentDuration,
@@ -57,7 +54,7 @@ export function CustomSoundUploader({
     setSuccess(false);
 
     try {
-      const result = await audioStorageService.uploadSound(file, userId, soundType);
+      const result = await audioStorageService.uploadSound(file, 'temp-user', soundType);
       onUploadSuccess(result);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -87,30 +84,13 @@ export function CustomSoundUploader({
   };
 
   const handleTestPlay = async () => {
-    if (!currentUrl) {
-      console.error('[CustomSoundUploader] No URL available for test playback');
-      return;
-    }
+    if (!currentUrl) return;
 
     setTestPlaying(true);
     try {
-      console.log(`[CustomSoundUploader] Starting test playback for ${soundType} sound`);
-      console.log(`[CustomSoundUploader] URL: ${currentUrl}`);
-      console.log(`[CustomSoundUploader] Volume: ${volume * 100}%`);
-
-      await audioInitializationService.unlockAudio();
-      await audioInitializationService.preloadCustomSounds(
-        soundType === 'online' ? currentUrl : undefined,
-        soundType === 'offline' ? currentUrl : undefined
-      );
-
       await audioStorageService.playAudio(currentUrl, volume);
-
-      console.log(`[CustomSoundUploader] Test playback completed successfully`);
     } catch (err) {
-      console.error('[CustomSoundUploader] Error playing test audio:', err);
-      setError(err instanceof Error ? err.message : 'Error al reproducir el audio de prueba');
-      setTimeout(() => setError(null), 5000);
+      console.error('Error playing test audio:', err);
     } finally {
       setTestPlaying(false);
     }
@@ -144,10 +124,6 @@ export function CustomSoundUploader({
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <p className="font-medium text-gray-900 truncate">{currentName}</p>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 whitespace-nowrap">
-                  <span className="w-2 h-2 bg-green-600 rounded-full"></span>
-                  Personalizado
-                </span>
               </div>
               <p className="text-sm text-gray-600 ml-6">
                 Duración: {currentDuration ? currentDuration.toFixed(1) : '?'}s

@@ -10,7 +10,6 @@ import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { FilterControls } from './FilterControls';
 import { BulkUploadModal } from './BulkUploadModal';
 import { NotificationCenter, playNotificationSound } from './NotificationCenter';
-import { isValidCustomSoundUrl } from '../utils/audioValidation';
 import * as XLSX from 'xlsx';
 import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown, FileText } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
@@ -58,12 +57,6 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     group_notifications: true,
     sound_volume: 0.4,
     notification_duration: 10000,
-    enable_recurring_notifications: false,
-    recurring_interval: 30,
-    recurring_volume: 0.25,
-    use_custom_sounds: false,
-    custom_sound_online_url: null,
-    custom_sound_offline_url: null,
   });
   const bulkMenuRef = useRef<HTMLDivElement>(null);
   const reportMenuRef = useRef<HTMLDivElement>(null);
@@ -219,33 +212,9 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   const loadNotificationPreferences = async () => {
     try {
-      console.log('[MonitoringView] Loading notification preferences...');
       const preferences = await notificationService.getUserPreferences(userId);
       if (preferences) {
-        const onlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_online_url);
-        const offlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_offline_url);
-
-        console.log('[MonitoringView] Preferences loaded successfully:', {
-          use_custom_sounds: preferences.use_custom_sounds,
-          online_url_valid: onlineUrlValid,
-          offline_url_valid: offlineUrlValid,
-          online_url: preferences.custom_sound_online_url || 'none',
-          offline_url: preferences.custom_sound_offline_url || 'none'
-        });
-
-        setNotificationPreferences({
-          enable_notifications: preferences.enable_notifications ?? true,
-          enable_sound: preferences.enable_sound ?? true,
-          group_notifications: preferences.group_notifications ?? true,
-          sound_volume: preferences.sound_volume ?? 0.4,
-          notification_duration: preferences.notification_duration ?? 10000,
-          enable_recurring_notifications: preferences.enable_recurring_notifications ?? false,
-          recurring_interval: preferences.recurring_interval ?? 30,
-          recurring_volume: preferences.recurring_volume ?? 0.25,
-          use_custom_sounds: (preferences.use_custom_sounds ?? false) && (onlineUrlValid || offlineUrlValid),
-          custom_sound_online_url: onlineUrlValid ? preferences.custom_sound_online_url : null,
-          custom_sound_offline_url: offlineUrlValid ? preferences.custom_sound_offline_url : null,
-        });
+        setNotificationPreferences(preferences);
 
         if (!recurringNotificationManagerRef.current) {
           recurringNotificationManagerRef.current = new RecurringNotificationManager();
@@ -305,14 +274,10 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               const customUrl = item.status === 'online'
                 ? notificationPreferences.custom_sound_online_url
                 : notificationPreferences.custom_sound_offline_url;
-              const hasValidUrl = isValidCustomSoundUrl(customUrl);
-              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
-              console.log(`[MonitoringView] Queued sound for ${item.status}: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
               playNotificationSound(
                 item.status,
                 notificationPreferences.sound_volume,
-                hasValidUrl ? customUrl : undefined,
-                isCustom
+                notificationPreferences.use_custom_sounds ? customUrl : undefined
               );
             }, index * 200);
           });
@@ -329,15 +294,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               offlineCount
             );
             if (shouldPlaySound) {
-              const customUrl = notificationPreferences.custom_sound_offline_url;
-              const hasValidUrl = isValidCustomSoundUrl(customUrl);
-              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
-              console.log(`[MonitoringView] Offline notification sound: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
+              const customUrl = notificationPreferences.use_custom_sounds
+                ? notificationPreferences.custom_sound_offline_url
+                : undefined;
               notificationService.playNotificationSound(
                 'offline',
                 notificationPreferences.sound_volume,
-                hasValidUrl ? customUrl : undefined,
-                isCustom
+                customUrl || undefined
               );
             }
           }
@@ -353,15 +316,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               onlineCount
             );
             if (shouldPlaySound) {
-              const customUrl = notificationPreferences.custom_sound_online_url;
-              const hasValidUrl = isValidCustomSoundUrl(customUrl);
-              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
-              console.log(`[MonitoringView] Online notification sound: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
+              const customUrl = notificationPreferences.use_custom_sounds
+                ? notificationPreferences.custom_sound_online_url
+                : undefined;
               notificationService.playNotificationSound(
                 'online',
                 notificationPreferences.sound_volume,
-                hasValidUrl ? customUrl : undefined,
-                isCustom
+                customUrl || undefined
               );
             }
           }
@@ -382,17 +343,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           const customUrl = item.status === 'online'
             ? notificationPreferences.custom_sound_online_url
             : notificationPreferences.custom_sound_offline_url;
-          const hasValidUrl = isValidCustomSoundUrl(customUrl);
-          const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
-          console.log(`[MonitoringView] Single notification sound for ${item.status}: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
           const playFunction = isPageVisibleRef.current
             ? playNotificationSound
             : notificationService.playNotificationSound;
           playFunction(
             item.status,
             notificationPreferences.sound_volume,
-            hasValidUrl ? customUrl : undefined,
-            isCustom
+            notificationPreferences.use_custom_sounds ? customUrl : undefined
           );
         }
       }
