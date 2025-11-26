@@ -41,22 +41,32 @@ function playBeep(frequency: number, duration: number, volume: number = 0.3) {
 export function playNotificationSound(
   status: 'online' | 'offline',
   volume: number = 0.4,
-  customUrl?: string | null
+  customUrl?: string | null,
+  isCustom: boolean = false
 ) {
-  if (customUrl) {
+  if (customUrl && isCustom) {
     try {
+      console.log(`[NotificationCenter] Playing custom sound from: ${customUrl}`);
       const audio = new Audio();
       audio.volume = Math.max(0, Math.min(1, volume));
       audio.src = customUrl;
       audio.crossOrigin = 'anonymous';
-      audio.play().catch(() => {
+
+      audio.onerror = () => {
+        console.error(`[NotificationCenter] Custom audio failed to load, falling back to default`);
+        playDefaultSound(status, volume);
+      };
+
+      audio.play().catch((error) => {
+        console.error(`[NotificationCenter] Custom audio playback failed:`, error);
         playDefaultSound(status, volume);
       });
     } catch (error) {
-      console.log('Custom audio playback failed, using default:', error);
+      console.error(`[NotificationCenter] Exception playing custom audio:`, error);
       playDefaultSound(status, volume);
     }
   } else {
+    console.log(`[NotificationCenter] Playing default sound for ${status}`);
     playDefaultSound(status, volume);
   }
 }

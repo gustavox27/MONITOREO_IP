@@ -105,27 +105,41 @@ export const notificationService = {
   playNotificationSound(
     status: 'online' | 'offline',
     volume: number = 0.4,
-    customSoundUrl?: string
+    customSoundUrl?: string,
+    isCustom: boolean = false
   ): void {
-    if (customSoundUrl) {
-      this.playCustomNotificationSound(customSoundUrl, volume);
+    if (customSoundUrl && isCustom) {
+      console.log(`[Notification Sound] Playing custom ${status} sound from: ${customSoundUrl}`);
+      this.playCustomNotificationSound(customSoundUrl, volume, status);
       return;
     }
 
+    console.log(`[Notification Sound] Playing default ${status} sound`);
     this.playDefaultNotificationSound(status, volume);
   },
 
-  async playCustomNotificationSound(url: string, volume: number = 0.4): Promise<void> {
+  async playCustomNotificationSound(url: string, volume: number = 0.4, status: 'online' | 'offline' = 'offline'): Promise<void> {
     try {
+      console.log(`[Custom Sound] Attempting to play custom audio from: ${url}`);
       const audio = new Audio();
       audio.volume = Math.max(0, Math.min(1, volume));
       audio.src = url;
       audio.crossOrigin = 'anonymous';
 
+      audio.onerror = () => {
+        console.error(`[Custom Sound] Error loading custom audio from ${url}, falling back to default`);
+        this.playDefaultNotificationSound(status, volume);
+      };
+
+      audio.addEventListener('canplay', () => {
+        console.log(`[Custom Sound] Custom audio loaded successfully, starting playback`);
+      }, { once: true });
+
       await audio.play();
+      console.log(`[Custom Sound] Custom audio playback started`);
     } catch (error) {
-      console.log('Custom audio playback failed, falling back to default:', error);
-      this.playDefaultNotificationSound('offline', volume);
+      console.error(`[Custom Sound] Custom audio playback failed, falling back to default:`, error);
+      this.playDefaultNotificationSound(status, volume);
     }
   },
 

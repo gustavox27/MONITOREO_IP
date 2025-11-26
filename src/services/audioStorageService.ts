@@ -103,6 +103,8 @@ export const audioStorageService = {
     const fileExtension = file.name.substring(file.name.lastIndexOf('.'));
     const fileName = `${userId}-${soundType}-${timestamp}${fileExtension}`;
 
+    console.log(`[Audio Upload] Starting upload for user: ${userId}, sound type: ${soundType}, file: ${fileName}`);
+
     try {
       const { error: uploadError } = await supabase.storage
         .from('notification-sounds')
@@ -112,14 +114,23 @@ export const audioStorageService = {
         });
 
       if (uploadError) {
+        console.error(`[Audio Upload] Upload failed for ${fileName}:`, uploadError);
         throw uploadError;
       }
+
+      console.log(`[Audio Upload] File uploaded successfully: ${fileName}`);
 
       const { data } = supabase.storage.from('notification-sounds').getPublicUrl(fileName);
 
       if (!data.publicUrl) {
         throw new Error('No se pudo obtener la URL del archivo');
       }
+
+      console.log(`[Audio Upload] Public URL generated: ${data.publicUrl}`);
+
+      await this.validateAudioUrl(data.publicUrl);
+
+      console.log(`[Audio Upload] URL validation passed for: ${data.publicUrl}`);
 
       return {
         url: data.publicUrl,
@@ -128,7 +139,7 @@ export const audioStorageService = {
         size: validation.info.size
       };
     } catch (error) {
-      console.error('Error uploading audio:', error);
+      console.error('[Audio Upload] Error uploading audio:', error);
       throw error instanceof Error ? error : new Error('Error al subir el archivo');
     }
   },
@@ -161,23 +172,62 @@ export const audioStorageService = {
   playAudio(url: string, volume: number = 0.5): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        console.log(`[Audio Playback] Starting playback of: ${url}`);
         const audio = new Audio();
         audio.volume = Math.max(0, Math.min(1, volume));
         audio.src = url;
+        audio.crossOrigin = 'anonymous';
 
         audio.onended = () => {
+          console.log(`[Audio Playback] Audio playback completed`);
           resolve();
         };
 
-        audio.onerror = () => {
+        audio.onerror = (error) => {
+          console.error(`[Audio Playback] Error playing audio from ${url}:`, error);
           reject(new Error('Failed to play audio'));
         };
 
         audio.play().catch((error) => {
+          console.error(`[Audio Playback] Play method failed:`, error);
           reject(error);
         });
       } catch (error) {
+        console.error(`[Audio Playback] Exception during playback setup:`, error);
         reject(error);
+      }
+    });
+  },
+
+  async validateAudioUrl(url: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      try {
+        console.log(`[Audio Validation] Validating URL: ${url}`);
+        const audio = new Audio();
+        audio.crossOrigin = 'anonymous';
+
+        const timeout = setTimeout(() => {
+          console.warn(`[Audio Validation] Validation timeout for: ${url}`);
+          resolve(false);
+        }, 5000);
+
+        audio.oncanplay = () => {
+          clearTimeout(timeout);
+          console.log(`[Audio Validation] URL validation successful: ${url}`);
+          resolve(true);
+        };
+
+        audio.onerror = () => {
+          clearTimeout(timeout);
+          console.error(`[Audio Validation] URL validation failed: ${url}`);
+          resolve(false);
+        };
+
+        audio.src = url;
+        audio.load();
+      } catch (error) {
+        console.error(`[Audio Validation] Exception during validation:`, error);
+        resolve(false);
       }
     });
   },

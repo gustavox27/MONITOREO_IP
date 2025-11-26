@@ -35,12 +35,21 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
   const loadPreferences = async () => {
     setLoading(true);
     try {
+      console.log(`[NotificationSettings] Loading preferences for user: ${userId}`);
       const userPrefs = await notificationService.getUserPreferences(userId);
       if (userPrefs) {
+        console.log(`[NotificationSettings] Preferences loaded:`, {
+          use_custom_sounds: userPrefs.use_custom_sounds,
+          custom_sound_online_url: userPrefs.custom_sound_online_url ? 'SET' : 'NOT SET',
+          custom_sound_offline_url: userPrefs.custom_sound_offline_url ? 'SET' : 'NOT SET',
+          sound_volume: userPrefs.sound_volume
+        });
         setPreferences(userPrefs);
+      } else {
+        console.log(`[NotificationSettings] No preferences found for user: ${userId}`);
       }
     } catch (error) {
-      console.error('Error loading preferences:', error);
+      console.error('[NotificationSettings] Error loading preferences:', error);
     } finally {
       setLoading(false);
     }
@@ -49,11 +58,18 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
   const handleSavePreferences = async () => {
     setSaving(true);
     try {
+      console.log(`[NotificationSettings] Saving preferences for user: ${userId}`, {
+        use_custom_sounds: preferences.use_custom_sounds,
+        custom_sound_online_url: preferences.custom_sound_online_url ? 'SET' : 'NOT SET',
+        custom_sound_offline_url: preferences.custom_sound_offline_url ? 'SET' : 'NOT SET',
+        sound_volume: preferences.sound_volume
+      });
       await notificationService.updateUserPreferences(userId, preferences);
+      console.log(`[NotificationSettings] Preferences saved successfully`);
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      console.error('[NotificationSettings] Error saving preferences:', error);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 2000);
     } finally {
@@ -327,7 +343,11 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
           <h3 className="font-semibold text-gray-900">Sonidos Personalizados</h3>
         </div>
 
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className={`mb-4 p-4 rounded-lg border ${
+          preferences.use_custom_sounds
+            ? 'bg-green-50 border-green-200'
+            : 'bg-blue-50 border-blue-200'
+        }`}>
           <label className="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -336,7 +356,15 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
               className="w-5 h-5 rounded"
             />
             <div>
-              <p className="font-medium text-gray-900">Usar Sonidos Personalizados</p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-gray-900">Usar Sonidos Personalizados</p>
+                {preferences.use_custom_sounds && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-200 text-green-800">
+                    <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+                    Activo
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-600">Sube tus propios archivos de audio para las notificaciones</p>
             </div>
           </label>
@@ -346,6 +374,7 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
           <div className="space-y-4">
             <CustomSoundUploader
               soundType="online"
+              userId={userId}
               currentUrl={preferences.custom_sound_online_url}
               currentName={preferences.custom_sound_online_name}
               currentDuration={preferences.custom_sound_online_duration}
@@ -356,6 +385,7 @@ export function NotificationSettings({ userId }: NotificationSettingsProps) {
 
             <CustomSoundUploader
               soundType="offline"
+              userId={userId}
               currentUrl={preferences.custom_sound_offline_url}
               currentName={preferences.custom_sound_offline_name}
               currentDuration={preferences.custom_sound_offline_duration}

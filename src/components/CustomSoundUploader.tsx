@@ -11,6 +11,7 @@ import {
 
 interface CustomSoundUploaderProps {
   soundType: 'online' | 'offline';
+  userId: string;
   currentUrl?: string | null;
   currentName?: string | null;
   currentDuration?: number | null;
@@ -21,6 +22,7 @@ interface CustomSoundUploaderProps {
 
 export function CustomSoundUploader({
   soundType,
+  userId,
   currentUrl,
   currentName,
   currentDuration,
@@ -54,7 +56,7 @@ export function CustomSoundUploader({
     setSuccess(false);
 
     try {
-      const result = await audioStorageService.uploadSound(file, 'temp-user', soundType);
+      const result = await audioStorageService.uploadSound(file, userId, soundType);
       onUploadSuccess(result);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -124,6 +126,10 @@ export function CustomSoundUploader({
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <p className="font-medium text-gray-900 truncate">{currentName}</p>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800 whitespace-nowrap">
+                  <span className="w-2 h-2 bg-green-600 rounded-full"></span>
+                  Personalizado
+                </span>
               </div>
               <p className="text-sm text-gray-600 ml-6">
                 Duración: {currentDuration ? currentDuration.toFixed(1) : '?'}s
