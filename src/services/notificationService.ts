@@ -1,5 +1,6 @@
 import type { Database } from '../lib/database.types';
 import { supabase } from '../lib/supabase';
+import { isValidCustomSoundUrl } from '../utils/audioValidation';
 
 type Device = Database['public']['Tables']['devices']['Row'];
 
@@ -105,13 +106,22 @@ export const notificationService = {
   playNotificationSound(
     status: 'online' | 'offline',
     volume: number = 0.4,
-    customSoundUrl?: string,
+    customSoundUrl?: string | null,
     isCustom: boolean = false
   ): void {
-    if (customSoundUrl && isCustom) {
+    const hasValidUrl = isValidCustomSoundUrl(customSoundUrl);
+    const shouldUseCustom = isCustom && hasValidUrl;
+
+    console.log(`[Notification Sound] Sound request: status=${status}, isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customSoundUrl || 'none'}`);
+
+    if (shouldUseCustom) {
       console.log(`[Notification Sound] Playing custom ${status} sound from: ${customSoundUrl}`);
       this.playCustomNotificationSound(customSoundUrl, volume, status);
       return;
+    }
+
+    if (isCustom && !hasValidUrl) {
+      console.warn(`[Notification Sound] Custom sound enabled but URL is invalid: ${customSoundUrl}`);
     }
 
     console.log(`[Notification Sound] Playing default ${status} sound`);
@@ -119,6 +129,12 @@ export const notificationService = {
   },
 
   async playCustomNotificationSound(url: string, volume: number = 0.4, status: 'online' | 'offline' = 'offline'): Promise<void> {
+    if (!isValidCustomSoundUrl(url)) {
+      console.warn(`[Custom Sound] Invalid URL provided, falling back to default:`, url);
+      this.playDefaultNotificationSound(status, volume);
+      return;
+    }
+
     try {
       console.log(`[Custom Sound] Attempting to play custom audio from: ${url}`);
       const audio = new Audio();
@@ -126,19 +142,32 @@ export const notificationService = {
       audio.src = url;
       audio.crossOrigin = 'anonymous';
 
+      audio.onloadstart = () => {
+        console.log(`[Custom Sound] Audio loading started for: ${url}`);
+      };
+
+      audio.oncanplay = () => {
+        console.log(`[Custom Sound] Custom audio loaded successfully, ready for playback`);
+      };
+
       audio.onerror = () => {
-        console.error(`[Custom Sound] Error loading custom audio from ${url}, falling back to default`);
+        console.error(`[Custom Sound] Error loading custom audio from ${url} (${audio.error?.message}), falling back to default`);
         this.playDefaultNotificationSound(status, volume);
       };
 
-      audio.addEventListener('canplay', () => {
-        console.log(`[Custom Sound] Custom audio loaded successfully, starting playback`);
-      }, { once: true });
-
-      await audio.play();
-      console.log(`[Custom Sound] Custom audio playback started`);
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log(`[Custom Sound] Custom audio playback started successfully`);
+          })
+          .catch((error) => {
+            console.error(`[Custom Sound] Custom audio playback failed:`, error);
+            this.playDefaultNotificationSound(status, volume);
+          });
+      }
     } catch (error) {
-      console.error(`[Custom Sound] Custom audio playback failed, falling back to default:`, error);
+      console.error(`[Custom Sound] Exception during playback setup:`, error);
       this.playDefaultNotificationSound(status, volume);
     }
   },

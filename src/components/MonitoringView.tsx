@@ -10,6 +10,7 @@ import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { FilterControls } from './FilterControls';
 import { BulkUploadModal } from './BulkUploadModal';
 import { NotificationCenter, playNotificationSound } from './NotificationCenter';
+import { isValidCustomSoundUrl } from '../utils/audioValidation';
 import * as XLSX from 'xlsx';
 import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown, FileText } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
@@ -220,6 +221,17 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     try {
       const preferences = await notificationService.getUserPreferences(userId);
       if (preferences) {
+        const onlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_online_url);
+        const offlineUrlValid = isValidCustomSoundUrl(preferences.custom_sound_offline_url);
+
+        console.log('[MonitoringView] Loaded preferences:', {
+          use_custom_sounds: preferences.use_custom_sounds,
+          online_url_valid: onlineUrlValid,
+          offline_url_valid: offlineUrlValid,
+          online_url: preferences.custom_sound_online_url || 'none',
+          offline_url: preferences.custom_sound_offline_url || 'none'
+        });
+
         setNotificationPreferences({
           enable_notifications: preferences.enable_notifications ?? true,
           enable_sound: preferences.enable_sound ?? true,
@@ -229,9 +241,9 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           enable_recurring_notifications: preferences.enable_recurring_notifications ?? false,
           recurring_interval: preferences.recurring_interval ?? 30,
           recurring_volume: preferences.recurring_volume ?? 0.25,
-          use_custom_sounds: preferences.use_custom_sounds ?? false,
-          custom_sound_online_url: preferences.custom_sound_online_url ?? null,
-          custom_sound_offline_url: preferences.custom_sound_offline_url ?? null,
+          use_custom_sounds: (preferences.use_custom_sounds ?? false) && (onlineUrlValid || offlineUrlValid),
+          custom_sound_online_url: onlineUrlValid ? preferences.custom_sound_online_url : null,
+          custom_sound_offline_url: offlineUrlValid ? preferences.custom_sound_offline_url : null,
         });
 
         if (!recurringNotificationManagerRef.current) {
@@ -292,12 +304,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               const customUrl = item.status === 'online'
                 ? notificationPreferences.custom_sound_online_url
                 : notificationPreferences.custom_sound_offline_url;
-              const isCustom = notificationPreferences.use_custom_sounds && !!customUrl;
-              console.log(`[MonitoringView] Queued sound for ${item.status}: isCustom=${isCustom}, url=${customUrl || 'default'}`);
+              const hasValidUrl = isValidCustomSoundUrl(customUrl);
+              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
+              console.log(`[MonitoringView] Queued sound for ${item.status}: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
               playNotificationSound(
                 item.status,
                 notificationPreferences.sound_volume,
-                isCustom ? customUrl : undefined,
+                hasValidUrl ? customUrl : undefined,
                 isCustom
               );
             }, index * 200);
@@ -315,15 +328,14 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               offlineCount
             );
             if (shouldPlaySound) {
-              const customUrl = notificationPreferences.use_custom_sounds
-                ? notificationPreferences.custom_sound_offline_url
-                : undefined;
-              const isCustom = notificationPreferences.use_custom_sounds && !!customUrl;
-              console.log(`[MonitoringView] Offline notification sound: isCustom=${isCustom}, url=${customUrl || 'default'}`);
+              const customUrl = notificationPreferences.custom_sound_offline_url;
+              const hasValidUrl = isValidCustomSoundUrl(customUrl);
+              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
+              console.log(`[MonitoringView] Offline notification sound: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
               notificationService.playNotificationSound(
                 'offline',
                 notificationPreferences.sound_volume,
-                isCustom ? customUrl : undefined,
+                hasValidUrl ? customUrl : undefined,
                 isCustom
               );
             }
@@ -340,15 +352,14 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               onlineCount
             );
             if (shouldPlaySound) {
-              const customUrl = notificationPreferences.use_custom_sounds
-                ? notificationPreferences.custom_sound_online_url
-                : undefined;
-              const isCustom = notificationPreferences.use_custom_sounds && !!customUrl;
-              console.log(`[MonitoringView] Online notification sound: isCustom=${isCustom}, url=${customUrl || 'default'}`);
+              const customUrl = notificationPreferences.custom_sound_online_url;
+              const hasValidUrl = isValidCustomSoundUrl(customUrl);
+              const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
+              console.log(`[MonitoringView] Online notification sound: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
               notificationService.playNotificationSound(
                 'online',
                 notificationPreferences.sound_volume,
-                isCustom ? customUrl : undefined,
+                hasValidUrl ? customUrl : undefined,
                 isCustom
               );
             }
@@ -370,15 +381,16 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           const customUrl = item.status === 'online'
             ? notificationPreferences.custom_sound_online_url
             : notificationPreferences.custom_sound_offline_url;
-          const isCustom = notificationPreferences.use_custom_sounds && !!customUrl;
-          console.log(`[MonitoringView] Single notification sound for ${item.status}: isCustom=${isCustom}, url=${customUrl || 'default'}`);
+          const hasValidUrl = isValidCustomSoundUrl(customUrl);
+          const isCustom = notificationPreferences.use_custom_sounds && hasValidUrl;
+          console.log(`[MonitoringView] Single notification sound for ${item.status}: isCustom=${isCustom}, hasValidUrl=${hasValidUrl}, url=${customUrl || 'default'}`);
           const playFunction = isPageVisibleRef.current
             ? playNotificationSound
             : notificationService.playNotificationSound;
           playFunction(
             item.status,
             notificationPreferences.sound_volume,
-            isCustom ? customUrl : undefined,
+            hasValidUrl ? customUrl : undefined,
             isCustom
           );
         }
