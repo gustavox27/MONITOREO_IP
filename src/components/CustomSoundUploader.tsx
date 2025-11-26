@@ -8,6 +8,7 @@ import {
   RECOMMENDED_DURATION,
   type UploadResult
 } from '../services/audioStorageService';
+import { audioInitializationService } from '../services/audioInitializationService';
 
 interface CustomSoundUploaderProps {
   soundType: 'online' | 'offline';
@@ -96,6 +97,12 @@ export function CustomSoundUploader({
       console.log(`[CustomSoundUploader] Starting test playback for ${soundType} sound`);
       console.log(`[CustomSoundUploader] URL: ${currentUrl}`);
       console.log(`[CustomSoundUploader] Volume: ${volume * 100}%`);
+
+      await audioInitializationService.unlockAudio();
+      await audioInitializationService.preloadCustomSounds(
+        soundType === 'online' ? currentUrl : undefined,
+        soundType === 'offline' ? currentUrl : undefined
+      );
 
       await audioStorageService.playAudio(currentUrl, volume);
 

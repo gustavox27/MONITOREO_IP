@@ -3,10 +3,15 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage, RegisterPage } from './components/AuthPages';
 import { Dashboard } from './components/Dashboard';
 import { AudioInitializationBanner } from './components/AudioInitializationBanner';
+import { audioInitializationService } from './services/audioInitializationService';
 
 function AppContent() {
   const { user, loading } = useAuth();
   const [page, setPage] = useState<'login' | 'register' | 'dashboard'>('login');
+
+  useEffect(() => {
+    audioInitializationService.setup();
+  }, []);
 
   useEffect(() => {
     const path = window.location.pathname;

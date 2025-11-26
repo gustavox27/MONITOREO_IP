@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react';
 import { Volume2, VolumeX, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { audioContextManager } from '../services/audioContextManager';
-import { audioInitializationHandler, type AudioInitializationState } from '../services/audioInitializationHandler';
+import { audioInitializationService, type AudioInitState } from '../services/audioInitializationService';
 
 export function AudioStatusIndicator() {
-  const [state, setState] = useState<AudioInitializationState>({
-    isInitialized: false,
+  const [state, setState] = useState<AudioInitState>({
     isReady: false,
-    hasError: false,
+    isUnlocked: false,
+    isLoading: false,
+    error: null,
   });
 
   useEffect(() => {
-    setState(audioInitializationHandler.getState());
+    setState(audioInitializationService.getState());
 
-    const unsubscribe = audioInitializationHandler.subscribe((newState) => {
+    const unsubscribe = audioInitializationService.subscribe((newState) => {
       setState(newState);
     });
 
     const contextUnsubscribe = audioContextManager.subscribe(() => {
-      setState(audioInitializationHandler.getState());
+      setState(audioInitializationService.getState());
     });
 
     return () => {
@@ -38,7 +39,7 @@ export function AudioStatusIndicator() {
     );
   }
 
-  if (state.isReady) {
+  if (state.isUnlocked) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
         <CheckCircle className="w-4 h-4 text-green-600" />
@@ -47,11 +48,20 @@ export function AudioStatusIndicator() {
     );
   }
 
-  if (state.isInitialized && !state.isReady) {
+  if (state.isLoading) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <AlertCircle className="w-4 h-4 text-yellow-600" />
-        <span className="text-xs font-medium text-yellow-700">Inicializando audio...</span>
+        <Loader className="w-4 h-4 text-yellow-600 animate-spin" />
+        <span className="text-xs font-medium text-yellow-700">Habilitando...</span>
+      </div>
+    );
+  }
+
+  if (state.error) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+        <AlertCircle className="w-4 h-4 text-red-600" />
+        <span className="text-xs font-medium text-red-700">Error de audio</span>
       </div>
     );
   }
@@ -59,7 +69,7 @@ export function AudioStatusIndicator() {
   return (
     <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
       <Volume2 className="w-4 h-4 text-blue-600" />
-      <span className="text-xs font-medium text-blue-700">Haz clic para habilitar</span>
+      <span className="text-xs font-medium text-blue-700">Audio deshabilitado</span>
     </div>
   );
 }

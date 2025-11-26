@@ -129,7 +129,7 @@ export const notificationService = {
     this.playDefaultNotificationSound(status, volume);
   },
 
-  async playCustomNotificationSound(url: string, volume: number = 0.4, status: 'online' | 'offline' = 'offline'): Promise<void> {
+  playCustomNotificationSound(url: string, volume: number = 0.4, status: 'online' | 'offline' = 'offline'): void {
     if (!isValidCustomSoundUrl(url)) {
       console.warn(`[Custom Sound] Invalid URL provided, falling back to default:`, url);
       this.playDefaultNotificationSound(status, volume);
@@ -137,62 +137,15 @@ export const notificationService = {
     }
 
     try {
-      console.log(`[Custom Sound] Attempting to play custom audio from: ${url}`);
-      const audio = new Audio();
-      audio.volume = Math.max(0, Math.min(1, volume));
-      audio.crossOrigin = 'anonymous';
+      console.log(`[Custom Sound] Attempting to play custom audio from AudioContext buffer`);
+      const success = audioContextManager.playAudioBuffer(status, volume);
 
-      let audioErrorOccurred = false;
-
-      audio.onloadstart = () => {
-        console.log(`[Custom Sound] Audio loading started for: ${url}`);
-      };
-
-      audio.oncanplay = () => {
-        console.log(`[Custom Sound] Custom audio loaded successfully, ready for playback. Duration: ${audio.duration}s, ReadyState: ${audio.readyState}`);
-      };
-
-      audio.onprogress = () => {
-        console.log(`[Custom Sound] Audio progress: buffered ranges available`);
-      };
-
-      audio.onerror = () => {
-        audioErrorOccurred = true;
-        const errorCode = audio.error?.code || 'UNKNOWN';
-        const errorMsg = audio.error?.message || 'Unknown error';
-        const networkState = audio.networkState;
-        const readyState = audio.readyState;
-
-        console.error(`[Custom Sound] Error loading custom audio from ${url}`);
-        console.error(`[Custom Sound] Error details - Code: ${errorCode}, Message: ${errorMsg}`);
-        console.error(`[Custom Sound] Network state: ${networkState}, Ready state: ${readyState}`);
-        console.error(`[Custom Sound] CORS or access issue detected. Falling back to default sound.`);
-
+      if (!success) {
+        console.warn(`[Custom Sound] AudioContext playback failed, falling back to default sound`);
         this.playDefaultNotificationSound(status, volume);
-      };
-
-      audio.onended = () => {
-        console.log(`[Custom Sound] Audio playback completed successfully`);
-      };
-
-      audio.src = url;
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log(`[Custom Sound] Custom audio playback started successfully`);
-          })
-          .catch((error) => {
-            audioErrorOccurred = true;
-            console.error(`[Custom Sound] Custom audio playback failed:`, error);
-            console.error(`[Custom Sound] Playback error message:`, error.message);
-            console.error(`[Custom Sound] Playback error name:`, error.name);
-            this.playDefaultNotificationSound(status, volume);
-          });
       }
     } catch (error) {
-      console.error(`[Custom Sound] Exception during playback setup:`, error);
+      console.error(`[Custom Sound] Exception during AudioContext playback:`, error);
       console.error(`[Custom Sound] Exception type:`, error instanceof Error ? error.message : 'Unknown');
       this.playDefaultNotificationSound(status, volume);
     }
