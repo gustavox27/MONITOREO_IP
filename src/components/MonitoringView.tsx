@@ -6,12 +6,13 @@ import { supabase } from '../lib/supabase';
 import { DeviceForm } from './DeviceForm';
 import { HistoryModal } from './HistoryModal';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
+import { DeleteAllConfirmModal } from './DeleteAllConfirmModal';
 import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { FilterControls } from './FilterControls';
 import { BulkUploadModal } from './BulkUploadModal';
 import { NotificationCenter, playNotificationSound } from './NotificationCenter';
 import * as XLSX from 'xlsx';
-import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown, FileText } from 'lucide-react';
+import { Plus, History, Pencil, Trash2, Activity, Clock, AlertCircle, Upload, ChevronDown, FileText, WifiOff, CheckCircle } from 'lucide-react';
 import { getDeviceIcon, getDeviceIconColor } from '../utils/deviceIcons';
 import { exportToPDF, exportToExcel, exportToImage, exportToHTML } from '../utils/exportHelpers';
 import type { Database } from '../lib/database.types';
@@ -28,12 +29,20 @@ interface Notification {
   displayDuration: number;
 }
 
+interface ConnectionInfo {
+  firstDownDate: string | null;
+  lastConnectedDate: string | null;
+  hasEverBeenOffline: boolean;
+  isCurrentlyOffline: boolean;
+}
+
 interface MonitoringViewProps {
   userId: string;
   isAdmin: boolean;
+  agentInactive?: boolean;
 }
 
-export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
+export function MonitoringView({ userId, isAdmin, agentInactive = false }: MonitoringViewProps) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -50,7 +59,10 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [showBulkMenu, setShowBulkMenu] = useState(false);
   const [showReportMenu, setShowReportMenu] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [connectionInfo, setConnectionInfo] = useState<Map<string, ConnectionInfo>>(new Map());
   const [notificationPreferences, setNotificationPreferences] = useState({
     enable_notifications: true,
     enable_sound: true,
@@ -185,6 +197,20 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
                   queueStatusChange(updatedDevice, newEvent.status);
                 }
                 deviceStatusRef.current.set(device.id, newEvent.status);
+
+                (async () => {
+                  const info = await deviceService.getConnectionStatusInfo(device.id);
+                  setConnectionInfo((prev) => {
+                    const updated = new Map(prev);
+                    updated.set(device.id, {
+                      firstDownDate: info.firstOfflineDate,
+                      lastConnectedDate: info.lastConnectedDate,
+                      hasEverBeenOffline: info.hasEverBeenOffline,
+                      isCurrentlyOffline: info.isCurrentlyOffline,
+                    });
+                    return updated;
+                  });
+                })();
 
                 return updatedDevice;
               }
@@ -391,10 +417,52 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     try {
       const data = await deviceService.getDevices(filterTechnician || undefined);
       setDevices(data);
+      await loadConnectionInfo(data);
     } catch (error) {
       console.error('Error loading devices:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadConnectionInfo = async (devicesToLoad: Device[]) => {
+    try {
+      const infoPromises = devicesToLoad.map(async (device) => {
+        try {
+          const info = await deviceService.getConnectionStatusInfo(device.id);
+          return {
+            id: device.id,
+            connectionInfo: {
+              firstDownDate: info.firstOfflineDate,
+              lastConnectedDate: info.lastConnectedDate,
+              hasEverBeenOffline: info.hasEverBeenOffline,
+              isCurrentlyOffline: info.isCurrentlyOffline,
+            }
+          };
+        } catch (error) {
+          console.error(`Error loading connection info for device ${device.id}:`, error);
+          return {
+            id: device.id,
+            connectionInfo: {
+              firstDownDate: null,
+              lastConnectedDate: null,
+              hasEverBeenOffline: false,
+              isCurrentlyOffline: false,
+            }
+          };
+        }
+      });
+
+      const results = await Promise.all(infoPromises);
+      const infoMap = new Map<string, ConnectionInfo>();
+
+      results.forEach(result => {
+        infoMap.set(result.id, result.connectionInfo);
+      });
+
+      setConnectionInfo(infoMap);
+    } catch (error) {
+      console.error('Error loading connection info:', error);
     }
   };
 
@@ -421,6 +489,29 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
     } catch (error) {
       console.error('Error deleting device:', error);
       alert('Error al eliminar el dispositivo');
+    }
+  };
+
+  const handleDeleteAllClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (devices.length > 0) {
+      setShowDeleteAllModal(true);
+    }
+  };
+
+  const handleDeleteAllConfirm = async () => {
+    try {
+      const deviceCount = devices.length;
+      await deviceService.deleteAllUserDevices(userId);
+      setShowDeleteAllModal(false);
+      setSuccessMessage(`${deviceCount} dispositivo${deviceCount !== 1 ? 's' : ''} eliminado${deviceCount !== 1 ? 's' : ''} exitosamente`);
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 5000);
+    } catch (error) {
+      console.error('Error deleting all devices:', error);
+      alert('Error al eliminar los dispositivos');
     }
   };
 
@@ -490,47 +581,65 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   const formatDate = (date: string | null) => {
     if (!date) return 'Nunca';
-    return new Date(date).toLocaleString('es-ES');
+    const d = new Date(date);
+    return d.toLocaleString('es-ES', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
   };
 
-  const calculateUptime = (device: Device) => {
-    if (device.status !== 'online' || !device.last_down) {
-      return 'N/A';
+  const calculateConnected = (device: Device): string => {
+    const info = connectionInfo.get(device.id);
+    if (!info) return 'Caído';
+
+    if (info.isCurrentlyOffline) {
+      return 'Caído';
     }
 
-    const lastDownTime = new Date(device.last_down).getTime();
-    const now = Date.now();
-    const diffMs = now - lastDownTime;
-
-    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (days > 0) {
-      return `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m`;
-    } else {
-      return 'Menos de 1m';
+    if (info.lastConnectedDate) {
+      return formatDate(info.lastConnectedDate);
     }
+
+    return 'Caído';
+  };
+
+  const calculateDown = (device: Device): string => {
+    const info = connectionInfo.get(device.id);
+    if (!info) return 'Nunca';
+
+    if (!info.hasEverBeenOffline) {
+      return 'Nunca';
+    }
+
+    if (info.firstDownDate) {
+      return formatDate(info.firstDownDate);
+    }
+
+    return 'Nunca';
   };
 
   const calculateTimeSinceLastChange = (device: Device): string => {
     const now = Date.now();
     let referenceTime: number | null = null;
+    const info = connectionInfo.get(device.id);
 
-    if (device.status === 'offline') {
-      if (!device.last_down) {
-        return 'Sin Conexión Inicial';
+    if (!info) {
+      return 'N/A';
+    }
+
+    if (info.isCurrentlyOffline) {
+      if (info.firstDownDate) {
+        referenceTime = new Date(info.firstDownDate).getTime();
       }
-      referenceTime = new Date(device.last_down).getTime();
     } else {
-      if (!device.last_down) {
-        return 'Sin Caídas';
+      if (info.lastConnectedDate) {
+        referenceTime = new Date(info.lastConnectedDate).getTime();
       }
-      referenceTime = new Date(device.last_down).getTime();
     }
 
     if (!referenceTime) return 'N/A';
@@ -597,6 +706,16 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="fixed top-4 right-4 bg-green-50 border border-green-200 rounded-lg p-4 shadow-lg flex items-center gap-3 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <p className="text-green-900 font-semibold text-sm">{successMessage}</p>
+          </div>
+        </div>
+      )}
       <NotificationCenter notifications={notifications} onDismiss={dismissNotification} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -628,6 +747,15 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           >
             <Plus className="w-5 h-5" />
             Agregar Dispositivo
+          </button>
+
+          <button
+            onClick={handleDeleteAllClick}
+            disabled={devices.length === 0}
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-red-600"
+          >
+            <Trash2 className="w-5 h-5" />
+            Eliminar
           </button>
 
           <div className="relative" ref={bulkMenuRef}>
@@ -743,7 +871,7 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
           <div className="overflow-x-auto">
             <table ref={tableRef} className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -764,13 +892,13 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
                     Respuesta
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
-                    Actividad
+                    Caída
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
-                    Última Caída
+                    Conectado
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700 uppercase">
-                    Último Cambio
+                    Time_elapsed
                   </th>
                   <th className="px-3 py-2 text-right text-xs font-semibold text-gray-700 uppercase">
                     Acciones
@@ -823,21 +951,21 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`text-xs font-medium ${
-                        device.status === 'offline' ? 'text-white' : 'text-gray-700'
-                      }`}>
-                        {calculateUptime(device)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`text-xs ${
+                      <span className={`text-xs whitespace-nowrap ${
                         device.status === 'offline' ? 'text-white' : 'text-gray-600'
                       }`}>
-                        {formatDate(device.last_down)}
+                        {calculateDown(device)}
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`text-xs font-medium ${
+                      <span className={`text-xs font-medium whitespace-nowrap ${
+                        device.status === 'offline' ? 'text-white' : 'text-gray-700'
+                      }`}>
+                        {calculateConnected(device)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`text-xs font-medium whitespace-nowrap ${
                         device.status === 'offline' ? 'text-white' : 'text-gray-700'
                       }`}>
                         {calculateTimeSinceLastChange(device)}
@@ -885,6 +1013,15 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
               </tbody>
             </table>
           </div>
+          {agentInactive && (
+            <div className="absolute inset-0 bg-gray-600 bg-opacity-40 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-4 transition-all duration-300">
+              <WifiOff className="w-14 h-14 text-white animate-pulse" />
+              <div className="text-center">
+                <h3 className="text-white text-lg font-semibold mb-1">Pérdida de conexión</h3>
+                <p className="text-white text-sm opacity-90">Sin conexión con el servidor</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -909,6 +1046,14 @@ export function MonitoringView({ userId, isAdmin }: MonitoringViewProps) {
           deviceIp={deleteDevice.ip_address}
           onConfirm={handleDeleteConfirm}
           onCancel={() => setDeleteDevice(null)}
+        />
+      )}
+
+      {showDeleteAllModal && (
+        <DeleteAllConfirmModal
+          deviceCount={devices.length}
+          onConfirm={handleDeleteAllConfirm}
+          onCancel={() => setShowDeleteAllModal(false)}
         />
       )}
 

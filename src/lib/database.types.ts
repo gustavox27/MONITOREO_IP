@@ -45,6 +45,7 @@ export interface Database {
           user_id: string
           created_at: string
           updated_at: string
+          device_registered_at: string | null
         }
         Insert: {
           id?: string
@@ -58,6 +59,7 @@ export interface Database {
           user_id: string
           created_at?: string
           updated_at?: string
+          device_registered_at?: string | null
         }
         Update: {
           id?: string
@@ -71,6 +73,7 @@ export interface Database {
           user_id?: string
           created_at?: string
           updated_at?: string
+          device_registered_at?: string | null
         }
       }
       events: {
@@ -80,6 +83,8 @@ export interface Database {
           status: 'online' | 'offline'
           response_time: number | null
           timestamp: string
+          is_device_registration: boolean
+          is_state_transition: boolean
         }
         Insert: {
           id?: string
@@ -87,6 +92,8 @@ export interface Database {
           status: 'online' | 'offline'
           response_time?: number | null
           timestamp?: string
+          is_device_registration?: boolean
+          is_state_transition?: boolean
         }
         Update: {
           id?: string
@@ -94,6 +101,8 @@ export interface Database {
           status?: 'online' | 'offline'
           response_time?: number | null
           timestamp?: string
+          is_device_registration?: boolean
+          is_state_transition?: boolean
         }
       }
       notification_preferences: {

@@ -17,144 +17,147 @@ Create a file called `monitor_agent.py`:
 
 ```python
 #!/usr/bin/env python3
+
 import os
-import time
-import subprocess
+import asyncio
+import aiohttp
 import platform
-import requests
+import time
+import logging
 from datetime import datetime
+from dotenv import load_dotenv
+import psutil
 
-# Configuration
-SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://wangyihjmrxdaajrbmuk.supabase.co')
-SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY', 'your-anon-key-here')
-CHECK_INTERVAL = 60  # seconds
+# Configuración de logs
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("agente_monitor.log"),
+        logging.StreamHandler()
+    ]
+)
 
-def ping_ip(ip_address):
-    """
-    Ping an IP address and return status and response time
-    """
+# Cargar variables .env
+load_dotenv()
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_ANON_KEY')
+
+# Parámetros optimizados
+CHECK_INTERVAL = 20  # segundos
+MAX_CONCURRENT_PINGS = 30  # concurrencia ajustada
+TIMEOUT = 8  # segundos
+RETRIES = 2  # reintento inteligente
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise EnvironmentError("Variables SUPABASE_URL y SUPABASE_ANON_KEY no configuradas.")
+
+HEADERS = {
+    'apikey': SUPABASE_KEY,
+    'Authorization': f'Bearer {SUPABASE_KEY}',
+    'Content-Type': 'application/json',
+    'Prefer': 'return=minimal'
+}
+
+async def ejecutar_ping(ip_address, timeout):
     param = '-n' if platform.system().lower() == 'windows' else '-c'
     command = ['ping', param, '1', ip_address]
-
+    start_time = time.time()
     try:
-        start_time = time.time()
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=5)
-        end_time = time.time()
-
-        response_time = int((end_time - start_time) * 1000)  # Convert to milliseconds
-        return {'status': 'online', 'response_time': response_time}
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return {'status': 'offline', 'response_time': None}
-
-def get_devices():
-    """
-    Fetch all devices from the API
-    """
-    headers = {
-        'apikey': SUPABASE_KEY,
-        'Authorization': f'Bearer {SUPABASE_KEY}',
-        'Content-Type': 'application/json'
-    }
-
-    try:
-        response = requests.get(
-            f'{SUPABASE_URL}/rest/v1/devices?select=*',
-            headers=headers
+        proc = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        response.raise_for_status()
-        return response.json()
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        end_time = time.time()
+        output = stdout.decode(errors='ignore')
+        logging.debug(f"Ping output for {ip_address}: {output.strip()}")
+
+        if "TTL" in output.upper() or "bytes=" in output.lower():
+            return {'status': 'online', 'response_time': int((end_time - start_time) * 1000)}
+        else:
+            return {'status': 'offline', 'response_time': None}
+    except asyncio.TimeoutError:
+        logging.warning(f"Timeout al hacer ping a {ip_address}")
+        return {'status': 'timeout', 'response_time': None}
     except Exception as e:
-        print(f"Error fetching devices: {e}")
+        logging.error(f"Error ejecutando ping a {ip_address}: {e}")
+        return {'status': 'error', 'response_time': None}
+
+async def ping_ip(ip_address):
+    for attempt in range(RETRIES):
+        result = await ejecutar_ping(ip_address, TIMEOUT)
+        if result['status'] == 'online':
+            return result
+    return {'status': 'offline', 'response_time': None}
+
+async def get_devices(session):
+    try:
+        async with session.get(f'{SUPABASE_URL}/rest/v1/devices?select=*', headers=HEADERS) as response:
+            response.raise_for_status()
+            return await response.json()
+    except Exception as e:
+        logging.error(f"Error fetching devices: {e}")
         return []
 
-def update_device_status(device_id, status, response_time):
-    """
-    Update device status and create event
-    """
-    headers = {
-        'apikey': SUPABASE_KEY,
-        'Authorization': f'Bearer {SUPABASE_KEY}',
-        'Content-Type': 'application/json',
-        'Prefer': 'return=minimal'
-    }
-
-    # Update device
-    device_update = {
-        'status': status,
-        'response_time': response_time
-    }
-
+async def update_device_status(session, device_id, status, response_time):
+    device_update = {'status': status, 'response_time': response_time}
     if status == 'offline':
         device_update['last_down'] = datetime.utcnow().isoformat()
-
     try:
-        response = requests.patch(
-            f'{SUPABASE_URL}/rest/v1/devices?id=eq.{device_id}',
-            headers=headers,
-            json=device_update
-        )
-        response.raise_for_status()
-
-        # Create event
-        event_data = {
-            'device_id': device_id,
-            'status': status,
-            'response_time': response_time
-        }
-
-        response = requests.post(
-            f'{SUPABASE_URL}/rest/v1/events',
-            headers=headers,
-            json=event_data
-        )
-        response.raise_for_status()
-
-        return True
+        async with session.patch(f'{SUPABASE_URL}/rest/v1/devices?id=eq.{device_id}', headers=HEADERS, json=device_update) as resp:
+            resp.raise_for_status()
     except Exception as e:
-        print(f"Error updating device {device_id}: {e}")
-        return False
+        logging.error(f"Error updating device {device_id}: {e}")
 
-def monitor_loop():
-    """
-    Main monitoring loop
-    """
-    print(f"Starting IP Monitor Agent")
-    print(f"Check interval: {CHECK_INTERVAL} seconds")
-    print(f"Supabase URL: {SUPABASE_URL}")
-    print("-" * 50)
+    event_data = {'device_id': device_id, 'status': status, 'response_time': response_time}
+    try:
+        async with session.post(f'{SUPABASE_URL}/rest/v1/events', headers=HEADERS, json=event_data) as resp:
+            resp.raise_for_status()
+    except Exception as e:
+        logging.error(f"Error creating event for device {device_id}: {e}")
 
-    while True:
-        try:
-            devices = get_devices()
-            print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Checking {len(devices)} devices...")
+async def monitor_loop():
+    logging.info("Agente de monitoreo iniciado (modo asyncio)")
+    logging.info(f"Intervalo: {CHECK_INTERVAL}s | Concurrencia máxima: {MAX_CONCURRENT_PINGS}")
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_PINGS)
 
-            for device in devices:
-                ip = device['ip_address']
-                device_id = device['id']
-                name = device['name']
+    async with aiohttp.ClientSession() as session:
+        while True:
+            start_cycle = time.time()
+            try:
+                devices = await get_devices(session)
+                logging.info(f"Verificando {len(devices)} dispositivos...")
+                timeout_count = 0
 
-                print(f"  Checking {name} ({ip})...", end=' ')
+                async def process_device(device):
+                    nonlocal timeout_count
+                    async with semaphore:
+                        result = await ping_ip(device['ip_address'])
+                        if result['status'] == 'timeout':
+                            timeout_count += 1
+                        await update_device_status(session, device['id'], result['status'], result['response_time'])
+                        logging.info(f"{device['name']} ({device['ip_address']}): {result['status']}")
 
-                result = ping_ip(ip)
-                update_device_status(device_id, result['status'], result['response_time'])
+                await asyncio.gather(*(process_device(d) for d in devices))
 
-                if result['status'] == 'online':
-                    print(f"✓ Online ({result['response_time']}ms)")
-                else:
-                    print(f"✗ Offline")
-
-            print(f"\nNext check in {CHECK_INTERVAL} seconds...")
-            time.sleep(CHECK_INTERVAL)
-
-        except KeyboardInterrupt:
-            print("\n\nAgent stopped by user")
-            break
-        except Exception as e:
-            print(f"Error in monitoring loop: {e}")
-            time.sleep(CHECK_INTERVAL)
+                # Métricas del sistema
+                cpu_usage = psutil.cpu_percent(interval=None)
+                ram_usage = psutil.virtual_memory().used / (1024 * 1024)  # MB
+                cycle_time = round(time.time() - start_cycle, 2)
+                logging.info(f"Métricas -> CPU: {cpu_usage}% | RAM: {ram_usage:.2f}MB | Tiempo ciclo: {cycle_time}s")
+                logging.info(f"Timeouts en este ciclo: {timeout_count}")
+                logging.info(f"Próxima verificación en {CHECK_INTERVAL}s...")
+                await asyncio.sleep(CHECK_INTERVAL)
+            except KeyboardInterrupt:
+                logging.warning("Agente detenido por el usuario")
+                break
+            except Exception as e:
+                logging.error(f"Error en el bucle: {e}")
+                await asyncio.sleep(CHECK_INTERVAL)
 
 if __name__ == '__main__':
-    monitor_loop()
+    asyncio.run(monitor_loop())
+
 ```
 
 ### Installation & Setup

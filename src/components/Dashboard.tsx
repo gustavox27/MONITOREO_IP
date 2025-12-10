@@ -138,7 +138,7 @@ export function Dashboard() {
           <DashboardView />
         )}
         {currentView === 'monitoring' && (
-          <MonitoringView userId={user!.id} isAdmin={isAdmin} />
+          <MonitoringView userId={user!.id} isAdmin={isAdmin} agentInactive={agentInactive} />
         )}
         {currentView === 'notifications' && (
           <NotificationsManagement userId={user!.id} />
